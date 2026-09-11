@@ -84,10 +84,11 @@ CREATE POLICY "Public Read Rounds" ON competition_rounds FOR SELECT USING (true)
 CREATE POLICY "Public Read Scores" ON scores FOR SELECT USING (true);
 
 -- Allow public / anon manage for live scoring & voting
-CREATE POLICY "Public Manage Scores" ON scores FOR ALL USING (true);
-CREATE POLICY "Public Manage Competitors" ON competitors FOR ALL USING (true);
-CREATE POLICY "Public Manage Judges" ON judges FOR ALL USING (true);
-CREATE POLICY "Public Manage Rounds" ON competition_rounds FOR ALL USING (true);
+CREATE POLICY "Public Manage Scores" ON scores FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Delete Scores" ON scores FOR DELETE USING (true);
+CREATE POLICY "Public Manage Competitors" ON competitors FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Manage Judges" ON judges FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Public Manage Rounds" ON competition_rounds FOR ALL USING (true) WITH CHECK (true);
 
 -- Unique indexes to prevent duplicate scoring per round
 CREATE UNIQUE INDEX IF NOT EXISTS idx_scores_judge_round_candidate ON scores(candidate_id, round_id, judge_id) WHERE source_type = 'judge';

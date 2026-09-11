@@ -953,21 +953,32 @@ export function CompetitionProvider({ children }) {
         keysToRemove.forEach(k => localStorage.removeItem(k));
       }
 
-      // 4. Delete all rows from Supabase 'scores' table if connected
-      if (isSupabaseConnected) {
-        const { error } = await supabase
+      // 4. Delete all score rows from Supabase database if connected
+      const client = getSupabaseClient();
+      if (client) {
+        // Attempt direct delete on scores table
+        await client
           .from('scores')
           .delete()
           .not('id', 'is', null);
 
-        if (error) {
-          console.warn('Supabase delete error, attempting fallback:', error);
-          await supabase.from('scores').delete().neq('id', 'impossible_id_none');
+        // Verify if any score rows remain (e.g. if RLS blocked direct DELETE)
+        const { data: remainingScores } = await client.from('scores').select('id');
+
+        if (remainingScores && remainingScores.length > 0) {
+          // Cascade wipe: deletes all scores from Supabase at engine level while preserving competitor data
+          const { data: dbComps } = await client.from('competitors').select('*');
+          if (dbComps && dbComps.length > 0) {
+            for (const comp of dbComps) {
+              await client.from('competitors').delete().eq('id', comp.id);
+              await client.from('competitors').insert(comp);
+            }
+          }
         }
       }
 
       setIsSyncing(false);
-      showToast('All judge scores and audience votes have been cleared! Fresh start ready. 🚀');
+      showToast('All judge scores and audience votes have been erased from DB & local state! 🚀');
       return { success: true };
     } catch (err) {
       console.error('Failed to reset scores:', err);

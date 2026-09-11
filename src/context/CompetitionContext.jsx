@@ -1,11 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { 
   INITIAL_CANDIDATES, 
   INITIAL_JUDGES, 
   INITIAL_ROUNDS, 
   INITIAL_SCORES 
 } from '../utils/seedData';
-import { calculateLeaderboard } from '../utils/scoringEngine';
+import { calculateRoundLeaderboard, calculateCumulativeLeaderboard, calculateLeaderboard } from '../utils/scoringEngine';
 import { getSupabaseClient, getSupabaseConfig } from '../lib/supabaseClient';
 import { getVoterDeviceId } from '../utils/voterId';
 import { CompetitionContext, useCompetition } from './useCompetition';
@@ -29,7 +29,14 @@ export function CompetitionProvider({ children }) {
   const [candidates, setCandidates] = useState([]);
   const [judges, setJudges] = useState([]);
   const [rounds, setRounds] = useState(INITIAL_ROUNDS);
-  const [scores, setScores] = useState([]);
+  const [scores, setScores] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.SCORES);
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
 
   // Database Connection Status
   const [isSupabaseConnected, setIsSupabaseConnected] = useState(false);
@@ -193,8 +200,8 @@ export function CompetitionProvider({ children }) {
 
       // Query Unified Scores Table
       const { data: dbScores, error: scoreErr } = await client.from('scores').select('*');
-      if (dbScores) {
-        setScores(dbScores.map(s => ({
+      if (dbScores && !scoreErr) {
+        const mapped = dbScores.map(s => ({
           id: s.id,
           candidateId: s.candidate_id,
           roundId: s.round_id,
@@ -202,10 +209,27 @@ export function CompetitionProvider({ children }) {
           judgeId: s.judge_id,
           voterFingerprint: s.voter_fingerprint,
           criteria: s.criteria,
-          rawScore: s.raw_score,
+          rawScore: Number(s.raw_score) || 0,
           notes: s.notes,
           createdAt: s.created_at
-        })));
+        }));
+
+        setScores(prev => {
+          const map = new Map();
+          // Keep existing local scores
+          (prev || []).forEach(s => {
+            if (s && s.id) map.set(s.id, s);
+          });
+          // Update/insert with verified database scores
+          mapped.forEach(s => {
+            if (s && s.id) map.set(s.id, s);
+          });
+          const merged = Array.from(map.values());
+          try {
+            localStorage.setItem(STORAGE_KEYS.SCORES, JSON.stringify(merged));
+          } catch (e) {}
+          return merged;
+        });
       }
 
       setIsSupabaseConnected(true);
@@ -227,7 +251,7 @@ export function CompetitionProvider({ children }) {
     const channel = client
       .channel('schema-db-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scores' }, (payload) => {
-        if (payload.eventType === 'INSERT') {
+        if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           const s = payload.new;
           setScores(prev => [
             ...prev.filter(item => item.id !== s.id),
@@ -297,25 +321,60 @@ export function CompetitionProvider({ children }) {
     }
   }, [selectedRoundId]);
 
-  // Active round object helper (strictly 2 rounds)
-  const currentRound = rounds.find(r => r.id === selectedRoundId) || rounds[0];
+  // The system's live active competition round (set by admin)
+  const liveRound = rounds.find(r => r.isCurrent) || rounds.find(r => r.status === 'active') || rounds[0];
+
+  // For judge, audience, and stage: always follow the system's live competition round set by admin!
+  const currentRound = (activeRole === 'audience' || activeRole === 'judge' || activeRole === 'stage')
+    ? liveRound
+    : (rounds.find(r => r.id === selectedRoundId) || liveRound);
   const activeJudge = judges.find(j => j.id === activeJudgeId) || judges[0];
 
-  // Calculated leaderboard for current round using unified scores
-  const currentLeaderboard = calculateLeaderboard({
-    candidates,
-    scores,
-    round: currentRound,
-    judges
-  });
+  // Auto-sync selectedRoundId to liveRound for judge, audience, and stage
+  useEffect(() => {
+    if ((activeRole === 'audience' || activeRole === 'judge' || activeRole === 'stage') && liveRound?.id && selectedRoundId !== liveRound.id) {
+      setSelectedRoundId(liveRound.id);
+    }
+  }, [activeRole, liveRound?.id, selectedRoundId]);
 
-  // Overall event leaderboard combining both rounds
-  const overallLeaderboard = calculateLeaderboard({
+  // Round 1 and Round 2 definitions
+  const round1 = rounds.find(r => r.order === 1 || r.id === 'round-1') || rounds[0];
+  const round2 = rounds.find(r => r.order === 2 || r.id === 'round-2') || rounds[1];
+
+  // Specific Leaderboard for Round 1
+  const round1Leaderboard = useMemo(() => calculateRoundLeaderboard({
     candidates,
     scores,
-    round: null,
+    round: round1,
     judges
-  });
+  }), [candidates, scores, round1, judges]);
+
+  // Specific Leaderboard for Round 2
+  const round2Leaderboard = useMemo(() => calculateRoundLeaderboard({
+    candidates,
+    scores,
+    round: round2,
+    judges
+  }), [candidates, scores, round2, judges]);
+
+  // Comprehensive Final Cumulative Leaderboard (All rounds weighted accurately)
+  const cumulativeLeaderboard = useMemo(() => calculateCumulativeLeaderboard({
+    candidates,
+    scores,
+    rounds,
+    judges
+  }), [candidates, scores, rounds, judges]);
+
+  // Current active round leaderboard
+  const currentLeaderboard = useMemo(() => {
+    if (currentRound?.id === round2?.id || currentRound?.order === 2) {
+      return round2Leaderboard;
+    }
+    return round1Leaderboard;
+  }, [currentRound?.id, currentRound?.order, round1Leaderboard, round2Leaderboard, round2?.id]);
+
+  // Overall event leaderboard alias
+  const overallLeaderboard = cumulativeLeaderboard;
 
   // ================= ADMIN ACTIONS =================
   const loginAdmin = (email, password) => {
@@ -619,7 +678,8 @@ export function CompetitionProvider({ children }) {
       const updated = prev.map(r => ({
         ...r,
         isCurrent: r.id === id,
-        status: r.id === id ? 'active' : (r.status === 'active' ? 'completed' : r.status)
+        // The newly activated round is active; all previous/other rounds become locked
+        status: r.id === id ? 'active' : 'locked'
       }));
       broadcastSync('SYNC_ALL', { rounds: updated });
       return updated;
@@ -629,22 +689,23 @@ export function CompetitionProvider({ children }) {
     const client = getSupabaseClient();
     if (client) {
       try {
-        await client.from('competition_rounds').update({ is_current: false });
+        // Mark all other rounds as locked and inactive
+        await client.from('competition_rounds').update({ is_current: false, status: 'locked' }).neq('id', id);
+        // Mark the selected round as active and current
         await client.from('competition_rounds').update({ is_current: true, status: 'active' }).eq('id', id);
       } catch (e) {
         console.warn('Supabase activate round error:', e);
       }
     }
-    showToast('Active round updated');
+    showToast(`Live Round updated to ${id === 'round-2' ? 'Round 2' : 'Round 1'}. Previous round locked.`);
   };
 
   const toggleRoundLock = async (id) => {
     const target = rounds.find(r => r.id === id);
     const isLocked = target?.status === 'locked';
-    const newStatus = isLocked ? 'active' : 'locked';
 
     setRounds(prev => {
-      const updated = prev.map(r => r.id === id ? { ...r, status: newStatus } : r);
+      const updated = prev.map(r => r.id === id ? { ...r, status: isLocked ? 'active' : 'locked' } : r);
       broadcastSync('SYNC_ALL', { rounds: updated });
       return updated;
     });
@@ -652,12 +713,12 @@ export function CompetitionProvider({ children }) {
     const client = getSupabaseClient();
     if (client) {
       try {
-        await client.from('competition_rounds').update({ status: newStatus }).eq('id', id);
+        await client.from('competition_rounds').update({ status: isLocked ? 'active' : 'locked' }).eq('id', id);
       } catch (e) {
         console.warn('Supabase toggle round lock error:', e);
       }
     }
-    showToast(isLocked ? 'Round unlocked for scoring' : 'Round locked! No further scores permitted.');
+    showToast(isLocked ? `Round unlocked for voting & scoring` : `Round locked! Voting and scoring closed.`);
   };
 
   const updateWeightages = async (roundId, judgeWeightage, audienceWeightage) => {
@@ -682,29 +743,28 @@ export function CompetitionProvider({ children }) {
           audience_weightage: a
         }).eq('id', roundId);
       } catch (e) {
-        console.warn('Supabase update weightages error:', e);
+        console.warn('Supabase update round error:', e);
       }
     }
-
-    showToast(`Weightages updated: ${j}% Judges + ${a}% Audience`);
+    showToast('Scoring weightages updated');
     return true;
   };
 
-  // ================= UNIFIED SCORES TABLE ACTIONS =================
-
-  // Judge Score Submission (Inserts / Updates unified `scores` table with sourceType = 'judge')
-  const submitJudgeScore = async ({ candidateId, judgeId, roundId, criteria, notes, songName }) => {
+  // Submit Judge Score
+  const submitJudgeScore = async ({ candidateId, judgeId, roundId, criteria, notes = '', songName = '' }) => {
     const targetRound = rounds.find(r => r.id === roundId);
     if (targetRound?.status === 'locked') {
-      showToast('Cannot submit: This round is locked by admin!', 'error');
-      return { success: false, message: 'Round is locked.' };
+      showToast('Scoring is locked for this round!', 'error');
+      return { success: false, message: 'Round is locked' };
     }
 
-    const critVals = Object.values(criteria || {});
-    const rawScore = critVals.length > 0 ? (critVals.reduce((a, b) => a + Number(b), 0) / critVals.length) : 0;
+    const rawValues = Object.values(criteria).map(Number);
+    const rawScore = rawValues.reduce((acc, curr) => acc + curr, 0) / rawValues.length;
+
+    const stableId = `sc-jdg-${judgeId}-${candidateId}-${roundId}`;
 
     const scoreRecord = {
-      id: `sc-j-${judgeId}-${candidateId}-${roundId}`,
+      id: stableId,
       candidateId,
       judgeId,
       roundId,
@@ -712,40 +772,33 @@ export function CompetitionProvider({ children }) {
       voterFingerprint: null,
       criteria,
       rawScore: parseFloat(rawScore.toFixed(2)),
-      notes: notes || '',
+      notes,
       createdAt: new Date().toISOString()
     };
 
     setScores(prev => {
-      const filtered = prev.filter(s => !(s.candidateId === candidateId && s.judgeId === judgeId && s.roundId === roundId));
+      const filtered = (prev || []).filter(s => !(
+        (s.candidateId === candidateId || s.candidate_id === candidateId) && 
+        (s.judgeId === judgeId || s.judge_id === judgeId) && 
+        (s.roundId === roundId || s.round_id === roundId)
+      ));
       const updated = [...filtered, scoreRecord];
+      try {
+        localStorage.setItem(STORAGE_KEYS.SCORES, JSON.stringify(updated));
+      } catch (e) {}
       broadcastSync('NEW_SCORE_RECORD', scoreRecord);
       return updated;
     });
 
-    // Update candidate song name if provided
-    if (songName !== undefined) {
-      setCandidates(prev => {
-        const updated = prev.map(c => c.id === candidateId ? { ...c, song: songName } : c);
-        broadcastSync('SYNC_ALL', { candidates: updated });
-        return updated;
-      });
-
-      const client = getSupabaseClient();
-      if (client) {
-        try {
-          await client.from('competitors').update({ song: songName }).eq('id', candidateId);
-        } catch (e) {
-          console.warn('Supabase update song error:', e);
-        }
-      }
+    if (songName) {
+      updateCandidate(candidateId, { song: songName });
     }
 
     const client = getSupabaseClient();
     if (client) {
       try {
-        await client.from('scores').upsert({
-          id: scoreRecord.id,
+        const { error } = await client.from('scores').upsert({
+          id: stableId,
           candidate_id: candidateId,
           judge_id: judgeId,
           round_id: roundId,
@@ -755,31 +808,48 @@ export function CompetitionProvider({ children }) {
           raw_score: scoreRecord.rawScore,
           notes: notes || ''
         });
+        if (error) {
+          console.error('Supabase submit score error:', error);
+        }
       } catch (e) {
-        console.warn('Supabase submit score error:', e);
+        console.warn('Supabase submit score exception:', e);
       }
     }
 
-    showToast('Scores submitted and synced to Supabase database!');
+    showToast('Score submitted successfully!');
     return { success: true, scoreRecord };
   };
 
   // Audience Vote Submission (Inserts into unified `scores` table with sourceType = 'audience')
   const checkHasVotedInRound = (roundId) => {
+    if (!roundId) return false;
     const deviceId = getVoterDeviceId();
-    return scores.some(s => s.roundId === roundId && s.sourceType === 'audience' && s.voterFingerprint === deviceId);
+    const hasLocal = typeof window !== 'undefined' && localStorage.getItem(`dance_comp_voted_${deviceId}_${roundId}`) === 'true';
+    if (hasLocal) return true;
+    return scores.some(s => 
+      (s.roundId === roundId || s.round_id === roundId) && 
+      (s.sourceType === 'audience' || s.source_type === 'audience') && 
+      (s.voterFingerprint === deviceId || s.voter_fingerprint === deviceId)
+    );
   };
 
   const getCandidateVotedInRound = (roundId) => {
+    if (!roundId) return null;
     const deviceId = getVoterDeviceId();
-    const vote = scores.find(s => s.roundId === roundId && s.sourceType === 'audience' && s.voterFingerprint === deviceId);
-    return vote ? vote.candidateId : null;
+    const localCandidateId = typeof window !== 'undefined' ? localStorage.getItem(`dance_comp_voted_candidate_${deviceId}_${roundId}`) : null;
+    if (localCandidateId) return localCandidateId;
+    const vote = scores.find(s => 
+      (s.roundId === roundId || s.round_id === roundId) && 
+      (s.sourceType === 'audience' || s.source_type === 'audience') && 
+      (s.voterFingerprint === deviceId || s.voter_fingerprint === deviceId)
+    );
+    return vote ? (vote.candidateId || vote.candidate_id) : null;
   };
 
-  const castAudienceVote = async (candidateId, roundId = selectedRoundId) => {
+  const castAudienceVote = async (candidateId, roundId = currentRound?.id || selectedRoundId) => {
     const targetRound = rounds.find(r => r.id === roundId);
-    if (targetRound?.status === 'locked') {
-      showToast('Voting is closed for this round!', 'error');
+    if (!targetRound || targetRound.status === 'locked' || targetRound.status === 'completed') {
+      showToast(`Voting is locked and closed for ${roundId === 'round-2' ? 'Round 2' : 'Round 1'}!`, 'error');
       return { success: false, message: 'Voting is closed for this round.' };
     }
 
@@ -787,12 +857,24 @@ export function CompetitionProvider({ children }) {
     const alreadyVoted = checkHasVotedInRound(roundId);
 
     if (alreadyVoted) {
-      showToast('You have already cast your vote for this round!', 'error');
+      showToast(`You have already cast your vote for ${roundId === 'round-2' ? 'Round 2' : 'Round 1'}!`, 'error');
       return { success: false, message: 'Already voted in this round.' };
     }
 
+    // Immediately record locally for zero lag
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`dance_comp_voted_${deviceId}_${roundId}`, 'true');
+        localStorage.setItem(`dance_comp_voted_candidate_${deviceId}_${roundId}`, candidateId);
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    const stableAudienceId = `sc-aud-${deviceId}-${roundId}-${candidateId}`;
+
     const newVoteRecord = {
-      id: `sc-aud-${deviceId}-${roundId}-${Date.now().toString(36)}`,
+      id: stableAudienceId,
       candidateId,
       judgeId: null,
       roundId,
@@ -805,7 +887,11 @@ export function CompetitionProvider({ children }) {
     };
 
     setScores(prev => {
-      const updated = [...prev, newVoteRecord];
+      const filtered = (prev || []).filter(s => s.id !== stableAudienceId);
+      const updated = [...filtered, newVoteRecord];
+      try {
+        localStorage.setItem(STORAGE_KEYS.SCORES, JSON.stringify(updated));
+      } catch (e) {}
       broadcastSync('NEW_SCORE_RECORD', newVoteRecord);
       return updated;
     });
@@ -813,8 +899,8 @@ export function CompetitionProvider({ children }) {
     const client = getSupabaseClient();
     if (client) {
       try {
-        await client.from('scores').insert({
-          id: newVoteRecord.id,
+        const { error } = await client.from('scores').upsert({
+          id: stableAudienceId,
           candidate_id: candidateId,
           round_id: roundId,
           source_type: 'audience',
@@ -824,12 +910,15 @@ export function CompetitionProvider({ children }) {
           raw_score: 1.0,
           notes: null
         });
+        if (error) {
+          console.error('Supabase cast vote error:', error);
+        }
       } catch (e) {
-        console.warn('Supabase cast vote error:', e);
+        console.warn('Supabase cast vote exception:', e);
       }
     }
 
-    showToast('Your vote has been officially recorded in Supabase! 🎉');
+    showToast(`Your vote for ${roundId === 'round-2' ? 'Round 2' : 'Round 1'} has been cast! 🎉`);
     return { success: true, vote: newVoteRecord };
   };
 
@@ -865,6 +954,9 @@ export function CompetitionProvider({ children }) {
         activeJudge: (judges.find(j => j.id === authenticatedJudgeId) || judges.find(j => j.id === activeJudgeId) || judges[0]),
         currentLeaderboard,
         overallLeaderboard,
+        round1Leaderboard,
+        round2Leaderboard,
+        cumulativeLeaderboard,
         toast,
         showToast,
         isSupabaseConnected,

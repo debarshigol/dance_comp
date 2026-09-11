@@ -83,12 +83,84 @@ CREATE POLICY "Public Read Judges" ON judges FOR SELECT USING (true);
 CREATE POLICY "Public Read Rounds" ON competition_rounds FOR SELECT USING (true);
 CREATE POLICY "Public Read Scores" ON scores FOR SELECT USING (true);
 
--- Allow public / anon insert & update for live scoring & voting
-CREATE POLICY "Public Insert Scores" ON scores FOR INSERT WITH CHECK (true);
-CREATE POLICY "Public Update Scores" ON scores FOR UPDATE USING (true);
+-- Allow public / anon manage for live scoring & voting
+CREATE POLICY "Public Manage Scores" ON scores FOR ALL USING (true);
 CREATE POLICY "Public Manage Competitors" ON competitors FOR ALL USING (true);
 CREATE POLICY "Public Manage Judges" ON judges FOR ALL USING (true);
 CREATE POLICY "Public Manage Rounds" ON competition_rounds FOR ALL USING (true);
+
+-- Unique indexes to prevent duplicate scoring per round
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scores_judge_round_candidate ON scores(candidate_id, round_id, judge_id) WHERE source_type = 'judge';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_scores_audience_round_voter ON scores(round_id, voter_fingerprint) WHERE source_type = 'audience';
+
+-- =========================================================================
+-- SQL VIEWS FOR REALTIME ROUND & CUMULATIVE SCORE CALCULATIONS
+-- =========================================================================
+
+-- View: Candidate Round Score Summary
+CREATE OR REPLACE VIEW view_candidate_round_scores AS
+SELECT 
+  c.id AS candidate_id,
+  c.candidate_number,
+  c.name AS candidate_name,
+  c.category,
+  r.id AS round_id,
+  r.name AS round_name,
+  r.judge_weightage,
+  r.audience_weightage,
+  COALESCE(ROUND(AVG(CASE WHEN s.source_type = 'judge' THEN s.raw_score END), 2), 0) AS judge_raw_avg,
+  COALESCE(ROUND((AVG(CASE WHEN s.source_type = 'judge' THEN s.raw_score END) / 10.0) * 100, 2), 0) AS judge_normalized_pct,
+  COALESCE(ROUND(((AVG(CASE WHEN s.source_type = 'judge' THEN s.raw_score END) / 10.0) * 100) * (r.judge_weightage / 100.0), 2), 0) AS judge_weighted_pts,
+  COUNT(CASE WHEN s.source_type = 'audience' THEN 1 END) AS audience_votes_count,
+  ROUND(
+    COALESCE(
+      (COUNT(CASE WHEN s.source_type = 'audience' THEN 1 END)::NUMERIC / 
+       NULLIF((SELECT COUNT(*) FROM scores WHERE round_id = r.id AND source_type = 'audience'), 0)::NUMERIC) * 100.0,
+      0
+    ), 2
+  ) AS audience_vote_share_pct,
+  ROUND(
+    COALESCE(
+      ((COUNT(CASE WHEN s.source_type = 'audience' THEN 1 END)::NUMERIC / 
+        NULLIF((SELECT COUNT(*) FROM scores WHERE round_id = r.id AND source_type = 'audience'), 0)::NUMERIC) * 100.0) * (r.audience_weightage / 100.0),
+      0
+    ), 2
+  ) AS audience_weighted_pts,
+  ROUND(
+    COALESCE(((AVG(CASE WHEN s.source_type = 'judge' THEN s.raw_score END) / 10.0) * 100) * (r.judge_weightage / 100.0), 0) +
+    COALESCE(
+      ((COUNT(CASE WHEN s.source_type = 'audience' THEN 1 END)::NUMERIC / 
+        NULLIF((SELECT COUNT(*) FROM scores WHERE round_id = r.id AND source_type = 'audience'), 0)::NUMERIC) * 100.0) * (r.audience_weightage / 100.0),
+      0
+    ), 2
+  ) AS round_final_score
+FROM competitors c
+CROSS JOIN competition_rounds r
+LEFT JOIN scores s ON s.candidate_id = c.id AND s.round_id = r.id
+GROUP BY c.id, c.candidate_number, c.name, c.category, r.id, r.name, r.judge_weightage, r.audience_weightage;
+
+-- View: Final Cumulative Score Standings
+CREATE OR REPLACE VIEW view_candidate_cumulative_scores AS
+WITH r1 AS (
+  SELECT candidate_id, round_final_score AS r1_score FROM view_candidate_round_scores WHERE round_id = 'round-1'
+),
+r2 AS (
+  SELECT candidate_id, round_final_score AS r2_score FROM view_candidate_round_scores WHERE round_id = 'round-2'
+)
+SELECT 
+  c.id AS candidate_id,
+  c.candidate_number,
+  c.name AS candidate_name,
+  c.category,
+  c.photo,
+  COALESCE(r1.r1_score, 0) AS round_1_score,
+  COALESCE(r2.r2_score, 0) AS round_2_score,
+  ROUND(COALESCE(r1.r1_score, 0) + COALESCE(r2.r2_score, 0), 2) AS total_points,
+  ROUND((COALESCE(r1.r1_score, 0) + COALESCE(r2.r2_score, 0)) / 2.0, 2) AS cumulative_score,
+  DENSE_RANK() OVER (ORDER BY (COALESCE(r1.r1_score, 0) + COALESCE(r2.r2_score, 0)) DESC) AS rank
+FROM competitors c
+LEFT JOIN r1 ON r1.candidate_id = c.id
+LEFT JOIN r2 ON r2.candidate_id = c.id;
 
 -- =========================================================================
 -- INITIAL SEED DATA FOR 2 COMPETITION ROUNDS

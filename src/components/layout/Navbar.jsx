@@ -93,27 +93,48 @@ export default function Navbar() {
             </div>
           )}
 
-          {/* Judge User Name Badge in header right */}
+          {/* Judge: User Name Badge & Active Round Badge (Round 1 / Round 2) */}
           {activeRole === 'judge' && (
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm ${
-              isDark
-                ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
-                : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
-            }`}>
-              <Award className={`w-3.5 h-3.5 ${isDark ? 'text-indigo-400' : 'text-indigo-500'}`} />
-              <span>{authenticatedJudge ? authenticatedJudge.name : 'Judge Portal'}</span>
+            <div className="flex items-center gap-2">
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm ${
+                isDark
+                  ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
+                  : 'bg-indigo-50 text-indigo-600 border border-indigo-200'
+              }`}>
+                <Award className={`w-3.5 h-3.5 ${isDark ? 'text-indigo-400' : 'text-indigo-500'}`} />
+                <span>{authenticatedJudge ? authenticatedJudge.name : 'Judge Portal'}</span>
+              </div>
+
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black tracking-wide shadow-sm ${
+                currentRound?.status === 'locked'
+                  ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                  : isDark
+                    ? 'bg-indigo-500/25 text-indigo-200 border border-indigo-500/40'
+                    : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+              }`}>
+                <Flame className={`w-3.5 h-3.5 ${isDark ? 'text-indigo-400' : 'text-indigo-600'}`} />
+                <span>{currentRound?.order ? `Round ${currentRound.order}` : (currentRound?.name?.toLowerCase().includes('round 2') || selectedRoundId === 'round-2' ? 'Round 2' : 'Round 1')}</span>
+                {currentRound?.status === 'locked' && (
+                  <span className="text-[10px] uppercase font-bold text-rose-400/90">(Locked)</span>
+                )}
+              </div>
             </div>
           )}
 
           {/* Audience: Display active round as Round 1 or Round 2 on the header */}
           {activeRole === 'audience' && (
             <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black tracking-wide shadow-sm ${
-              isDark
-                ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
-                : 'bg-rose-50 text-rose-600 border border-rose-200'
+              currentRound?.status === 'locked'
+                ? 'bg-rose-500/15 text-rose-400 border border-rose-500/30'
+                : isDark
+                  ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
+                  : 'bg-rose-50 text-rose-600 border border-rose-200'
             }`}>
               <Flame className={`w-3.5 h-3.5 ${isDark ? 'text-rose-400' : 'text-rose-500'}`} />
               <span>{currentRound?.order ? `Round ${currentRound.order}` : (currentRound?.name?.toLowerCase().includes('round 2') || selectedRoundId === 'round-2' ? 'Round 2' : 'Round 1')}</span>
+              {currentRound?.status === 'locked' && (
+                <span className="text-[10px] uppercase font-bold text-rose-400/90">(Locked)</span>
+              )}
             </div>
           )}
 

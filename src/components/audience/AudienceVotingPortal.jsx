@@ -32,22 +32,26 @@ export default function AudienceVotingPortal() {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
-  const [selectedContestantModal, setSelectedContestantModal] = useState(null);
-  const [showLiveStandings, setShowLiveStandings] = useState(false);
 
-  const hasVoted = checkHasVotedInRound(selectedRoundId);
-  const votedCandidateId = getCandidateVotedInRound(selectedRoundId);
-  const isRoundLocked = currentRound?.status === 'locked';
+  // Active round is always the live system round for audience
+  const activeRound = currentRound;
+  const activeRoundId = activeRound?.id || selectedRoundId || 'round-1';
+  const hasVoted = checkHasVotedInRound(activeRoundId);
+  const votedCandidateId = getCandidateVotedInRound(activeRoundId);
+  const isRoundLocked = activeRound?.status === 'locked' || activeRound?.status === 'completed';
+  const roundLabel = activeRound?.order 
+    ? `Round ${activeRound.order}` 
+    : (activeRound?.name?.toLowerCase().includes('round 2') || activeRoundId === 'round-2' ? 'Round 2' : 'Round 1');
 
   // Round audience votes
-  const roundVotes = votes.filter(v => v.roundId === selectedRoundId);
+  const roundVotes = votes.filter(v => v.roundId === activeRoundId);
   const totalVotesCount = roundVotes.length;
 
-  const handleVote = (candidateId, candidateName) => {
+  const handleVote = async (candidateId, candidateName) => {
     if (isRoundLocked || hasVoted) return;
 
-    const result = castAudienceVote(candidateId, selectedRoundId);
-    if (result.success) {
+    const result = await castAudienceVote(candidateId, activeRoundId);
+    if (result && (result.success || result.vote)) {
       // Fire celebratory confetti!
       try {
         confetti({
@@ -81,6 +85,21 @@ export default function AudienceVotingPortal() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20 px-2 sm:px-4">
+      {/* Round Status Info Banner if locked */}
+      {isRoundLocked && (
+        <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-center gap-2 font-bold text-center shadow-lg">
+          <Lock className="w-4 h-4 text-rose-400 shrink-0" />
+          <span>{roundLabel} is currently locked. Voting is closed until admin opens the next round.</span>
+        </div>
+      )}
+
+      {/* Round Vote Confirmation Banner if already voted in this round */}
+      {hasVoted && !isRoundLocked && (
+        <div className="p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-center gap-2 font-bold text-center shadow-lg">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>You have submitted your official vote for {roundLabel}.</span>
+        </div>
+      )}
 
       {/* Search Filter */}
       <div className="relative">
@@ -108,97 +127,97 @@ export default function AudienceVotingPortal() {
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {filteredCandidates.map((candidate) => {
-          const isVotedForThis = votedCandidateId === candidate.id;
-          const candidateVotesCount = roundVotes.filter(v => v.candidateId === candidate.id).length;
+            const isVotedForThis = votedCandidateId === candidate.id;
 
-          return (
-            <div
-              key={candidate.id}
-              className={`glass-card rounded-3xl overflow-hidden flex flex-col justify-between border transition-all ${
-                isVotedForThis 
-                  ? 'border-pink-500 ring-2 ring-pink-500/40 bg-pink-950/20' 
-                  : 'border-white/10 hover:border-pink-500/30'
-              }`}
-            >
-              <div>
-                {/* Photo */}
-                <div className="relative aspect-square w-full bg-slate-900 rounded-2xl overflow-hidden">
-                  <img
-                    src={candidate.photo}
-                    alt={candidate.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-3">
-                    <h3 className="font-extrabold text-white text-sm leading-tight drop-shadow-md truncate">
-                      {candidate.name}
-                    </h3>
+            return (
+              <div
+                key={candidate.id}
+                className={`glass-card rounded-3xl overflow-hidden flex flex-col justify-between border transition-all ${
+                  isVotedForThis 
+                    ? 'border-pink-500 ring-2 ring-pink-500/40 bg-pink-950/20' 
+                    : 'border-white/10 hover:border-pink-500/30'
+                }`}
+              >
+                <div>
+                  {/* Photo */}
+                  <div className="relative aspect-square w-full bg-slate-900 rounded-2xl overflow-hidden">
+                    <img
+                      src={candidate.photo}
+                      alt={candidate.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/30 to-transparent" />
+                    <div className="absolute bottom-0 left-0 right-0 p-3">
+                      <h3 className="font-extrabold text-white text-sm leading-tight drop-shadow-md truncate">
+                        {candidate.name}
+                      </h3>
+                    </div>
+                  </div>
+
+                  {/* Details */}
+                  <div className="p-3 space-y-2 text-xs">
+                    {/* ID, Age, Voted badges */}
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2 py-0.5 rounded-md bg-pink-600/90 text-white font-mono font-black text-[10px] shadow">
+                        {candidate.candidateNumber}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded-md bg-slate-800 text-white text-[10px] font-bold border border-white/10">
+                        Age: {candidate.age || 21}
+                      </span>
+                      {isVotedForThis && (
+                        <span className="px-2 py-0.5 rounded-md bg-gradient-to-r from-pink-500 to-rose-500 text-white font-black text-[10px] flex items-center gap-0.5 shadow ml-auto">
+                          <Heart className="w-3 h-3 fill-white" /> Voted
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Song */}
+                    {candidate.song && (
+                      <div className="flex items-center gap-1.5 text-slate-300">
+                        <Music className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                        <span className="truncate font-medium">{candidate.song}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                {/* Details */}
-                <div className="p-3 space-y-2 text-xs">
-                  {/* ID, Age, Voted badges */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="px-2 py-0.5 rounded-md bg-pink-600/95 text-white font-mono font-black text-[10px] shadow">
-                      {candidate.candidateNumber}
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded-md bg-slate-800 text-white font-bold text-[10px] border border-white/10">
-                      Age: {candidate.age || 20}
-                    </span>
-                    {isVotedForThis && (
-                      <span className="px-2 py-0.5 rounded-md bg-gradient-to-r from-pink-500 to-rose-500 text-white font-black text-[10px] flex items-center gap-0.5 shadow ml-auto">
-                        <Heart className="w-3 h-3 fill-white" /> Voted
+                {/* Vote Button */}
+                <div className="p-4 pt-0">
+                  {isVotedForThis ? (
+                    <button
+                      disabled
+                      className="w-full py-2.5 px-4 rounded-2xl bg-emerald-600/30 border border-emerald-500/50 text-emerald-200 font-bold text-xs flex items-center justify-center gap-2 cursor-default shadow-sm"
+                    >
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>Voted in {roundLabel}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleVote(candidate.id, candidate.name)}
+                      disabled={isRoundLocked || hasVoted}
+                      className={`w-full py-2.5 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                        hasVoted
+                          ? 'bg-slate-800/80 text-slate-500 cursor-not-allowed border border-white/5'
+                          : isRoundLocked
+                          ? 'bg-slate-800/80 text-slate-500 cursor-not-allowed border border-white/5'
+                          : 'bg-gradient-to-r from-pink-600 via-rose-500 to-pink-600 hover:from-pink-500 hover:to-rose-400 text-white shadow-lg shadow-pink-600/30 hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
+                      }`}
+                    >
+                      <Heart className="w-4 h-4" />
+                      <span>
+                        {isRoundLocked
+                          ? `${roundLabel} Voting Closed`
+                          : hasVoted
+                          ? `Already Voted in ${roundLabel}`
+                          : `Vote for ${candidate.name.split(' ')[0]}`}
                       </span>
-                    )}
-                  </div>
-
-                  {/* Song */}
-                  {candidate.song && (
-                    <div className="flex items-center gap-1.5 text-slate-300">
-                      <Music className="w-3.5 h-3.5 text-pink-400 shrink-0" />
-                      <span className="truncate font-medium">{candidate.song}</span>
-                    </div>
+                    </button>
                   )}
                 </div>
               </div>
-
-              {/* Vote Button */}
-              <div className="p-4 pt-0">
-                {isVotedForThis ? (
-                  <button
-                    disabled
-                    className="w-full py-2.5 px-4 rounded-2xl bg-emerald-600/30 border border-emerald-500/50 text-emerald-200 font-bold text-xs flex items-center justify-center gap-2 cursor-default"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>Voted for {candidate.name.split(' ')[0]}</span>
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleVote(candidate.id, candidate.name)}
-                    disabled={isRoundLocked || hasVoted}
-                    className={`w-full py-2.5 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                      hasVoted
-                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-white/5'
-                        : isRoundLocked
-                        ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                        : 'bg-gradient-to-r from-pink-600 via-rose-500 to-pink-600 hover:from-pink-500 hover:to-rose-400 text-white shadow-lg shadow-pink-600/30 hover:scale-[1.02] active:scale-[0.98]'
-                    }`}
-                  >
-                    <Heart className="w-4 h-4" />
-                    <span>
-                      {isRoundLocked
-                        ? 'Voting Closed'
-                        : hasVoted
-                        ? 'Already Voted'
-                        : `Vote for ${candidate.name.split(' ')[0]}`}
-                    </span>
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })}
         </div>
       )}
     </div>

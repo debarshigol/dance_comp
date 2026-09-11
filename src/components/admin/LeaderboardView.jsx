@@ -93,7 +93,6 @@ export default function LeaderboardView() {
         'Overall Rank',
         'Candidate Number',
         'Name',
-        'Category',
         `Round 1 Score (${round1.judgeWeightage}% J : ${round1.audienceWeightage}% A)`,
         `Round 2 Score (${round2.judgeWeightage}% J : ${round2.audienceWeightage}% A)`,
         'Total Points (/200)',
@@ -104,7 +103,6 @@ export default function LeaderboardView() {
         c.rank,
         `"${c.candidateNumber}"`,
         `"${c.name}"`,
-        `"${c.category}"`,
         c.round1Score,
         c.round2Score,
         c.totalCumulativePoints,
@@ -116,7 +114,6 @@ export default function LeaderboardView() {
         'Round Rank',
         'Candidate Number',
         'Name',
-        'Category',
         'Judge Raw Average (0-10)',
         'Normalized Judge Score (%)',
         `Judge Weighted Points (${activeRoundObj.judgeWeightage}%)`,
@@ -130,7 +127,6 @@ export default function LeaderboardView() {
         c.rank,
         `"${c.candidateNumber}"`,
         `"${c.name}"`,
-        `"${c.category}"`,
         c.rawJudgeAverage,
         `${c.normalizedJudgeScore}%`,
         c.weightedJudge,
@@ -272,7 +268,6 @@ export default function LeaderboardView() {
                 <div>
                   <span className="font-mono text-xs font-bold text-amber-400">{topThree[0].candidateNumber}</span>
                   <h3 className="text-base font-extrabold text-white leading-snug">{topThree[0].name}</h3>
-                  <span className="text-[11px] text-slate-400">{topThree[0].category}</span>
                 </div>
               </div>
 
@@ -335,7 +330,6 @@ export default function LeaderboardView() {
                 <div>
                   <span className="font-mono text-xs font-bold text-slate-300">{topThree[1].candidateNumber}</span>
                   <h3 className="text-sm font-extrabold text-white leading-snug">{topThree[1].name}</h3>
-                  <span className="text-[11px] text-slate-400">{topThree[1].category}</span>
                 </div>
               </div>
 
@@ -398,7 +392,6 @@ export default function LeaderboardView() {
                 <div>
                   <span className="font-mono text-xs font-bold text-amber-500">{topThree[2].candidateNumber}</span>
                   <h3 className="text-sm font-extrabold text-white leading-snug">{topThree[2].name}</h3>
-                  <span className="text-[11px] text-slate-400">{topThree[2].category}</span>
                 </div>
               </div>
 
@@ -545,7 +538,6 @@ export default function LeaderboardView() {
                                 <span className="font-mono text-pink-400 font-bold text-[11px]">{item.candidateNumber}</span>
                                 <span className="font-bold text-white text-sm">{item.name}</span>
                               </div>
-                              <span className="text-[11px] text-slate-400 block">{item.category} • {item.style}</span>
                             </div>
                           </div>
                         </td>

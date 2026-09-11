@@ -7,10 +7,10 @@ export function useTheme() {
   if (!context) {
     // Fallback if not inside ThemeProvider
     return {
-      theme: 'light',
+      theme: 'dark',
       setTheme: () => {},
       toggleTheme: () => {},
-      isDark: false
+      isDark: true
     };
   }
   return context;
@@ -22,7 +22,7 @@ export function ThemeProvider({ children }) {
       const saved = localStorage.getItem('nritya_theme');
       if (saved === 'dark' || saved === 'light') return saved;
     }
-    return 'light'; // Light mode is default selection
+    return 'dark'; // Dark mode is default
   });
 
   useEffect(() => {

@@ -930,6 +930,53 @@ export function CompetitionProvider({ children }) {
     showToast('Synced all data directly from Supabase Database!');
   };
 
+  // Reset all scores and votes from judges and audiences for a fresh competition start
+  const resetScoresData = async () => {
+    try {
+      setIsSyncing(true);
+
+      // 1. Reset in-memory scores state
+      setScores([]);
+
+      // 2. Clear stored scores in localStorage
+      localStorage.setItem(STORAGE_KEYS.SCORES, JSON.stringify([]));
+
+      // 3. Clear audience vote keys from localStorage
+      if (typeof window !== 'undefined') {
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('dance_comp_voted_') || key.startsWith('audience_voted_'))) {
+            keysToRemove.push(key);
+          }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+      }
+
+      // 4. Delete all rows from Supabase 'scores' table if connected
+      if (isSupabaseConnected) {
+        const { error } = await supabase
+          .from('scores')
+          .delete()
+          .not('id', 'is', null);
+
+        if (error) {
+          console.warn('Supabase delete error, attempting fallback:', error);
+          await supabase.from('scores').delete().neq('id', 'impossible_id_none');
+        }
+      }
+
+      setIsSyncing(false);
+      showToast('All judge scores and audience votes have been cleared! Fresh start ready. 🚀');
+      return { success: true };
+    } catch (err) {
+      console.error('Failed to reset scores:', err);
+      setIsSyncing(false);
+      showToast('Scores reset locally.');
+      return { success: false, error: err.message };
+    }
+  };
+
   const resetToDemoData = refreshDatabaseData;
 
   return (
@@ -984,6 +1031,7 @@ export function CompetitionProvider({ children }) {
         castAudienceVote,
         checkHasVotedInRound,
         getCandidateVotedInRound,
+        resetScoresData,
         resetToDemoData
       }}
     >

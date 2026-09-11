@@ -27,6 +27,8 @@ export default function Navbar() {
     logoutAdmin,
     authenticatedJudge,
     logoutJudge,
+    currentRound,
+    selectedRoundId,
     refreshDatabaseData, 
     isSupabaseConnected, 
     isSyncing 
@@ -103,15 +105,15 @@ export default function Navbar() {
             </div>
           )}
 
-          {/* Audience Badge */}
+          {/* Audience: Display active round as Round 1 or Round 2 on the header */}
           {activeRole === 'audience' && (
-            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm ${
+            <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black tracking-wide shadow-sm ${
               isDark
                 ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30'
                 : 'bg-rose-50 text-rose-600 border border-rose-200'
             }`}>
-              <Vote className={`w-3.5 h-3.5 ${isDark ? 'text-rose-400' : 'text-rose-500'}`} />
-              <span>Audience</span>
+              <Flame className={`w-3.5 h-3.5 ${isDark ? 'text-rose-400' : 'text-rose-500'}`} />
+              <span>{currentRound?.order ? `Round ${currentRound.order}` : (currentRound?.name?.toLowerCase().includes('round 2') || selectedRoundId === 'round-2' ? 'Round 2' : 'Round 1')}</span>
             </div>
           )}
 

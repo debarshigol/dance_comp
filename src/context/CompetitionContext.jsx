@@ -38,20 +38,23 @@ export function CompetitionProvider({ children }) {
   // Role Navigation: 'admin', 'judge', 'audience', 'stage'
   const [activeRole, setActiveRole] = useState(() => {
     if (typeof window !== 'undefined') {
-      const pathname = window.location.pathname;
+      const pathname = window.location.pathname.toLowerCase();
       const params = new URLSearchParams(window.location.search);
-      const roleParam = params.get('role');
-      if (pathname === '/judge' || pathname.startsWith('/judge/')) {
-        return 'judge';
-      }
-      if (pathname === '/audience' || pathname.startsWith('/audience/')) {
-        return 'audience';
-      }
-      if (pathname === '/stage' || pathname.startsWith('/stage/')) {
-        return 'stage';
-      }
+      const roleParam = params.get('role')?.toLowerCase();
+
+      // Explicit role query param takes top priority (e.g. from public QR code scan)
       if (roleParam && ['admin', 'judge', 'audience', 'stage'].includes(roleParam)) {
         return roleParam;
+      }
+
+      if (pathname.includes('audience')) {
+        return 'audience';
+      }
+      if (pathname.includes('judge')) {
+        return 'judge';
+      }
+      if (pathname.includes('stage')) {
+        return 'stage';
       }
     }
     return 'admin';

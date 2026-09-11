@@ -81,44 +81,6 @@ export default function AudienceVotingPortal() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20 px-2 sm:px-4">
-      {/* Hero Welcome Banner */}
-      <div className="glass-panel-glow rounded-3xl p-6 sm:p-8 text-center relative overflow-hidden border border-pink-500/30">
-        <div className="absolute -top-24 -left-24 w-48 h-48 bg-pink-600/25 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -right-24 w-48 h-48 bg-purple-600/25 rounded-full blur-3xl pointer-events-none" />
-
-        <h1 className="text-2xl sm:text-4xl font-black text-white tracking-tight">
-          Audience Voting
-        </h1>
-        <p className="text-slate-300 text-xs sm:text-sm mt-1 max-w-md mx-auto">
-          Tap your favorite dancer to cast your vote
-        </p>
-
-        {/* Round Badge & Status */}
-        <div className="mt-4 pt-4 border-t border-white/10 flex flex-wrap items-center justify-center gap-3 text-xs">
-          <div className="flex items-center gap-1.5 bg-slate-900/80 px-3.5 py-1.5 rounded-full border border-white/10">
-            <span className="text-slate-400">Round:</span>
-            <span className="font-bold text-white">{currentRound?.name}</span>
-          </div>
-
-          {isRoundLocked ? (
-            <span className="inline-flex items-center gap-1 font-bold px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/40">
-              <Lock className="w-3 h-3" /> Closed
-            </span>
-          ) : (
-            <span className="inline-flex items-center gap-1 font-bold px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-              <Unlock className="w-3 h-3" /> Open
-            </span>
-          )}
-        </div>
-
-        {/* Voting Status Banner */}
-        {hasVoted && (
-          <div className="mt-4 p-2.5 rounded-2xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-200 text-xs flex items-center justify-center gap-2 font-medium">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-            <span>You have cast your vote for this round</span>
-          </div>
-        )}
-      </div>
 
       {/* Search Filter */}
       <div className="relative">

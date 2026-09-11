@@ -17,10 +17,10 @@ export default function QRCodeCenter() {
   const { currentRound, setActiveRole, showToast } = useCompetition();
   const canvasRef = useRef(null);
 
-  // Voting URL pointing to dedicated /audience route
+  // Public audience voting URL with ?role=audience fail-safe
   const votingUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/audience`
-    : 'https://dancefest.live/audience';
+    ? `${window.location.origin}/audience?role=audience`
+    : 'https://dancefest.live/audience?role=audience';
 
   const copyVotingUrl = () => {
     navigator.clipboard.writeText(votingUrl);

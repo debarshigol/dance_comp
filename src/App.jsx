@@ -30,14 +30,14 @@ export function AppContent() {
       const roleParam = params.get('role');
       const codeParam = params.get('code');
 
-      if (pathname === '/judge' || pathname.startsWith('/judge/')) {
+      if (roleParam && ['admin', 'judge', 'audience', 'stage'].includes(roleParam.toLowerCase())) {
+        setActiveRole(roleParam.toLowerCase());
+      } else if (pathname === '/judge' || pathname.startsWith('/judge/') || pathname.includes('judge')) {
         setActiveRole('judge');
-      } else if (pathname === '/audience' || pathname.startsWith('/audience/')) {
+      } else if (pathname === '/audience' || pathname.startsWith('/audience/') || pathname.includes('audience')) {
         setActiveRole('audience');
-      } else if (pathname === '/stage' || pathname.startsWith('/stage/')) {
+      } else if (pathname === '/stage' || pathname.startsWith('/stage/') || pathname.includes('stage')) {
         setActiveRole('stage');
-      } else if (roleParam && ['admin', 'judge', 'audience', 'stage'].includes(roleParam)) {
-        setActiveRole(roleParam);
       } else if (pathname === '/' && !roleParam) {
         setActiveRole('admin');
       }

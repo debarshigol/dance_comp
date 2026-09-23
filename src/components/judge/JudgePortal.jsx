@@ -22,7 +22,10 @@ import {
 
 export default function JudgePortal() {
   const { 
-    candidates, 
+    candidates,
+    round1Candidates,
+    round2Candidates,
+    currentRoundCandidates,
     judges, 
     authenticatedJudge, 
     activeJudge, 
@@ -50,9 +53,11 @@ export default function JudgePortal() {
   const activeRound = currentRound;
   const activeRoundId = activeRound?.id || selectedRoundId || 'round-1';
   const isRoundLocked = activeRound?.status === 'locked' || activeRound?.status === 'completed';
-  const roundLabel = activeRound?.order 
-    ? `Round ${activeRound.order}` 
-    : (activeRound?.name?.toLowerCase().includes('round 2') || activeRoundId === 'round-2' ? 'Round 2' : 'Round 1');
+  const isRound2 = activeRoundId === 'round-2' || activeRound?.order === 2;
+  const roundLabel = isRound2 ? 'Round 2' : 'Round 1';
+
+  // Candidate pool: All 20 competitors for Round 1; Top 10 qualified for Round 2
+  const candidatePool = isRound2 ? (round2Candidates || []) : (round1Candidates || candidates);
 
   // Scores submitted by this judge in this active round
   const myRoundScores = scores.filter(s => 
@@ -61,21 +66,22 @@ export default function JudgePortal() {
   );
 
   const scoredCandidateIds = new Set(myRoundScores.map(s => s.candidateId || s.candidate_id));
-  const totalCandidates = candidates.length;
-  const scoredCount = scoredCandidateIds.size;
+  const totalCandidates = candidatePool.length;
+  const scoredCount = candidatePool.filter(c => scoredCandidateIds.has(c.id)).length;
   const progressPct = totalCandidates > 0 ? Math.round((scoredCount / totalCandidates) * 100) : 0;
 
   const handleOpenScore = (candidate) => {
     setSelectedCandidate(candidate);
   };
 
-  const handleSaveScore = ({ criteria, notes, songName }) => {
+  const handleSaveScore = ({ score, criteria, notes, songName }) => {
     if (!selectedCandidate || !currentJudge || isRoundLocked) return;
 
     submitJudgeScore({
       candidateId: selectedCandidate.id,
       judgeId: currentJudge.id,
       roundId: activeRoundId,
+      score,
       criteria,
       notes,
       songName
@@ -84,8 +90,8 @@ export default function JudgePortal() {
     setSelectedCandidate(null);
   };
 
-  // Filter candidates
-  const filteredCandidates = candidates.filter(cand => {
+  // Filter candidates from round pool
+  const filteredCandidates = candidatePool.filter(cand => {
     const isScored = scoredCandidateIds.has(cand.id);
     if (filterState === 'pending' && isScored) return false;
     if (filterState === 'scored' && !isScored) return false;
@@ -112,6 +118,8 @@ export default function JudgePortal() {
         </div>
       )}
 
+
+
       {/* Filter Tabs & Search */}
       <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
         <div className="flex items-center bg-slate-900/90 p-1 rounded-2xl border border-white/10">
@@ -123,7 +131,7 @@ export default function JudgePortal() {
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            All ({candidates.length})
+            All ({totalCandidates})
           </button>
           <button
             onClick={() => setFilterState('pending')}
@@ -133,7 +141,7 @@ export default function JudgePortal() {
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            Pending ({candidates.length - scoredCount})
+            Pending ({Math.max(0, totalCandidates - scoredCount)})
           </button>
           <button
             onClick={() => setFilterState('scored')}
@@ -171,7 +179,7 @@ export default function JudgePortal() {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5 sm:gap-3">
           {filteredCandidates.map((candidate) => {
             const hasScored = scoredCandidateIds.has(candidate.id);
             const scoreRecord = myRoundScores.find(s => (s.candidateId || s.candidate_id) === candidate.id);
@@ -185,7 +193,10 @@ export default function JudgePortal() {
                     : 'border-white/10 hover:border-indigo-500/30'
                 }`}
               >
-                <div>
+                <div 
+                  onClick={() => !isRoundLocked && handleOpenScore(candidate)}
+                  className="cursor-pointer"
+                >
                   {/* Photo Frame */}
                   <div className="relative aspect-square w-full bg-slate-900 rounded-2xl overflow-hidden">
                     <img
@@ -205,21 +216,23 @@ export default function JudgePortal() {
                   </div>
 
                   {/* Body Details: Info placed below image */}
-                  <div className="p-3 space-y-2 text-xs">
+                  <div className="p-2.5 sm:p-3 space-y-2 text-xs">
                     {/* Badges */}
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="px-2 py-0.5 rounded-md bg-indigo-600 text-white font-mono font-black text-[10px] shadow">
-                        {candidate.candidateNumber}
-                      </span>
-                      <span className="px-1.5 py-0.5 rounded-md bg-slate-800 text-white text-[10px] font-bold border border-white/10">
-                        Age: {candidate.age || 21}
-                      </span>
+                    <div className="flex items-center justify-between gap-1">
+                      <div className="flex items-center gap-1 min-w-0 shrink-0">
+                        <span className="px-1.5 py-0.5 rounded-md bg-indigo-600 text-white font-mono font-black text-[10px] shadow shrink-0">
+                          {candidate.candidateNumber}
+                        </span>
+                        <span className="px-1 py-0.5 rounded-md bg-slate-800 text-white text-[10px] font-bold border border-white/10 shrink-0">
+                          Age: {candidate.age || 21}
+                        </span>
+                      </div>
                       {hasScored ? (
-                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold flex items-center gap-1 ml-auto">
-                          <Check className="w-3 h-3" /> Scored
+                        <span className="px-1.5 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold flex items-center gap-0.5 shrink-0">
+                          <Check className="w-2.5 h-2.5" /> Scored
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold ml-auto">
+                        <span className="px-1.5 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold shrink-0">
                           Pending
                         </span>
                       )}
@@ -232,26 +245,11 @@ export default function JudgePortal() {
                         <span className="truncate font-medium">{candidate.song}</span>
                       </div>
                     )}
-
-                    {/* Score Preview Badge */}
-                    {hasScored && (
-                      <div className="flex items-center justify-between p-2 rounded-xl bg-indigo-950/60 border border-indigo-500/30">
-                        <span className="text-[11px] text-slate-400">Score ({roundLabel}):</span>
-                        <span className="font-mono font-black text-indigo-300 text-sm">
-                          {scoreRecord?.rawScore} <span className="text-[10px] text-slate-400 font-normal">/ 10</span>
-                        </span>
-                      </div>
-                    )}
-                    {scoreRecord?.notes && (
-                      <p className="text-[11px] text-indigo-200 bg-indigo-950/40 p-2 rounded-lg border border-indigo-500/20 italic line-clamp-2">
-                        "{scoreRecord.notes}"
-                      </p>
-                    )}
                   </div>
                 </div>
 
                 {/* Action Button */}
-                <div className="p-4 pt-0">
+                <div className="p-2.5 sm:p-4 pt-0">
                   <button
                     onClick={() => !isRoundLocked && handleOpenScore(candidate)}
                     disabled={isRoundLocked}
@@ -269,7 +267,7 @@ export default function JudgePortal() {
                         ? `${roundLabel} Locked`
                         : hasScored
                         ? `Edit ${roundLabel} Score`
-                        : `Score ${roundLabel} (0-10)`}
+                        : `Score ${roundLabel}`}
                     </span>
                   </button>
                 </div>

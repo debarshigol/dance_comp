@@ -15,7 +15,11 @@ import {
 
 export default function RoundManager() {
   const { 
-    rounds, 
+    rounds,
+    candidates,
+    round1Candidates,
+    round2Candidates,
+    round1Leaderboard,
     setRoundActive, 
     toggleRoundLock, 
     updateWeightages, 
@@ -42,8 +46,69 @@ export default function RoundManager() {
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
         <div>
           <h2 className="text-xl font-extrabold text-white flex items-center gap-2">
-            <span>Rounds & Weightages</span>
+            <Layers className="w-5 h-5 text-indigo-400" />
+            <span>Rounds, Weightages & 20-to-10 Advancement</span>
           </h2>
+          <p className="text-xs text-slate-400 mt-0.5">
+            Round 1 features all 20 competitors. Top 10 advance to Round 2 based on Round 1 score.
+          </p>
+        </div>
+      </div>
+
+      {/* 20 -> 10 Candidate Flow Summary Banner */}
+      <div className="p-5 rounded-2xl bg-gradient-to-r from-indigo-950/70 via-slate-900 to-pink-950/70 border border-indigo-500/30 space-y-4 shadow-xl">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-white/10">
+          <div>
+            <span className="text-xs font-bold text-pink-400 uppercase tracking-wider block">
+              Official Competition Advancement Rules
+            </span>
+            <h3 className="text-base font-extrabold text-white mt-0.5">
+              Round 1 (20 Competitors) ➔ Top 10 Finalists ➔ Round 2 Grand Finale
+            </h3>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-3 py-1 rounded-xl bg-indigo-600/30 text-indigo-300 font-mono text-xs font-bold border border-indigo-500/30">
+              Round 1: {round1Candidates?.length || 20} Competitors
+            </span>
+            <span className="text-slate-400">➔</span>
+            <span className="px-3 py-1 rounded-xl bg-pink-600/30 text-pink-300 font-mono text-xs font-bold border border-pink-500/30">
+              Round 2: {round2Candidates?.length || 10} Finalists
+            </span>
+          </div>
+        </div>
+
+        {/* Top 10 Qualified Finalists Preview */}
+        <div>
+          <span className="text-xs font-bold text-slate-300 block mb-2">
+            Round 2 Qualified Finalists (Top 10 from Round 1):
+          </span>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            {(round2Candidates || []).slice(0, 10).map((cand, idx) => {
+              const r1Item = round1Leaderboard.find(l => l.candidateId === cand.id);
+              return (
+                <div 
+                  key={cand.id} 
+                  className="bg-slate-950/80 p-2.5 rounded-xl border border-white/10 flex items-center gap-2 text-xs"
+                >
+                  <img 
+                    src={cand.photo} 
+                    alt={cand.name} 
+                    className="w-8 h-8 rounded-lg object-cover ring-1 ring-pink-500/40 shrink-0" 
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono text-pink-400 font-bold text-[10px]">{cand.candidateNumber}</span>
+                      <span className="font-mono text-[10px] text-emerald-400 font-bold">#{idx + 1}</span>
+                    </div>
+                    <span className="font-bold text-white text-[11px] truncate block">{cand.name}</span>
+                    {r1Item?.hasScores && (
+                      <span className="text-[10px] text-slate-400 font-mono">{r1Item.finalScore} pts</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
 

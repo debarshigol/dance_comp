@@ -1,39 +1,63 @@
 /**
- * Scoring and Calculation Methodology (BRD Section 4)
- * Consumes the unified `scores` table containing both judge criterion evaluations and audience votes.
- * 
- * Criteria (0 to 10):
- * 1. Rhythm & Timing (rhythm)
- * 2. Choreography & Musicality (choreography)
- * 3. Expression & Emotion (expression)
- * 4. Technique & Execution (technique)
- * 5. Stage Presence & Impact (stagePresence)
+ * Scoring and Calculation Methodology
+ * Consumes the unified `scores` table containing single 50-point judge evaluations and audience votes.
+ *
+ * Scoring Rules:
+ * 1. Judge Scoring: Single section per candidate in any round, score out of 50.
+ * 2. Average Judge Score (0-50): Average of evaluations across active judges who scored.
+ * 3. Normalized Judge Score (%): (Average Judge Score / 50) * 100.
+ * 4. Weighted Judge Points: Normalized Judge % * (Judge Weightage % / 100).
+ * 5. Weighted Audience Points: Audience Vote Share % * (Audience Weightage % / 100).
+ * 6. Final Round Score (0-100): Weighted Judge Points + Weighted Audience Points.
+ * 7. Advancement Rule: Top 10 candidates from Round 1 advance to Round 2.
  */
 
-export const SCORING_CRITERIA = [
-  { id: 'rhythm', label: 'Rhythm / Timing', description: 'Beat synchronization, tempo control & musical accents' },
-  { id: 'choreography', label: 'Choreography', description: 'Originality, transition flow, composition & complexity' },
-  { id: 'expression', label: 'Expression', description: 'Storytelling, emotional engagement & face dynamics' },
-  { id: 'technique', label: 'Technique', description: 'Clean lines, posture, balance, footwork & precision' },
-  { id: 'stagePresence', label: 'Stage Presence', description: 'Confidence, energy projection & audience connection' },
-];
+export const MAX_JUDGE_SCORE = 50;
+export const SCORING_CRITERIA = [];
 
 /**
- * Calculates candidate scores for a given round or overall using the unified `scores` table.
- * 
- * @param {Array} candidates - List of candidates / competitors
- * @param {Array} scores - Unified list of scores [{ id, candidateId, roundId, sourceType, judgeId, voterFingerprint, criteria, rawScore, notes }]
- * @param {Object} round - The current or selected round object { id, judgeWeightage, audienceWeightage }
- * @param {Array} judges - List of registered judges
+ * Extracts numeric judge score (0 to 50) from score record with backward compatibility.
+ */
+export function extractJudgeScore(scoreRecord) {
+  if (!scoreRecord) return 0;
+
+  // Single score in criteria object: { score: 42.5 }
+  if (scoreRecord.criteria?.score !== undefined) {
+    return Math.max(0, Math.min(MAX_JUDGE_SCORE, Number(scoreRecord.criteria.score) || 0));
+  }
+
+  // Direct rawScore
+  if (scoreRecord.rawScore !== undefined && scoreRecord.rawScore !== null) {
+    const raw = Number(scoreRecord.rawScore);
+    // Backward compatibility: If an old evaluation was stored on 0-10 scale with 5 criteria
+    if (raw <= 10 && scoreRecord.criteria && Object.keys(scoreRecord.criteria).length > 1) {
+      return Math.max(0, Math.min(MAX_JUDGE_SCORE, raw * 5));
+    }
+    return Math.max(0, Math.min(MAX_JUDGE_SCORE, raw));
+  }
+
+  // Legacy multi-criteria fallback: sum of 5 criteria (each 0-10 = 50 total)
+  if (scoreRecord.criteria && typeof scoreRecord.criteria === 'object') {
+    const vals = Object.values(scoreRecord.criteria).map(Number).filter(n => !isNaN(n));
+    if (vals.length > 0) {
+      return Math.max(0, Math.min(MAX_JUDGE_SCORE, vals.reduce((a, b) => a + b, 0)));
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * Calculates candidate scores for a given round using single 50-point judge scoring.
  */
 export function calculateRoundLeaderboard({ candidates = [], scores = [], round, judges = [] }) {
   if (!candidates || candidates.length === 0) return [];
 
   const roundId = round?.id || 'round-1';
-  const judgeWeightage = Number(round?.judgeWeightage ?? 60);
-  const audienceWeightage = Number(round?.audienceWeightage ?? 40);
+  const judgeWeightage = Number(round?.judgeWeightage ?? 70);
+  const audienceWeightage = Number(round?.audienceWeightage ?? 30);
 
-  // 1. Separate judge scores and audience votes from unified scores table for this round
+  // 1. Filter round-specific scores
   const roundScores = scores.filter(s => (s.roundId === roundId || s.round_id === roundId));
 
   const judgeScoreRecords = roundScores.filter(s => 
@@ -48,7 +72,7 @@ export function calculateRoundLeaderboard({ candidates = [], scores = [], round,
 
   // Active judges count
   const activeJudges = judges.filter(j => j.status === 'active');
-  const activeJudgeCount = activeJudges.length;
+  const activeJudgeCount = activeJudges.length > 0 ? activeJudges.length : 2;
 
   const results = candidates.map(candidate => {
     const candidateId = candidate.id;
@@ -57,60 +81,44 @@ export function calculateRoundLeaderboard({ candidates = [], scores = [], round,
     const candidateJudgeScores = judgeScoreRecords.filter(s => 
       (s.candidateId || s.candidate_id) === candidateId
     );
-    
-    let sumCriteriaPoints = 0;
-    let totalCriteriaEntries = 0;
-    const criterionAverages = {};
-    SCORING_CRITERIA.forEach(crit => {
-      criterionAverages[crit.id] = { total: 0, count: 0, avg: 0 };
-    });
+
+    let sumJudgePoints = 0;
+    const individualJudgeScores = {};
 
     candidateJudgeScores.forEach(scoreRecord => {
-      const critObj = scoreRecord.criteria || {};
-      SCORING_CRITERIA.forEach(crit => {
-        const val = Number(critObj[crit.id] ?? critObj[crit.id.toLowerCase()] ?? 0);
-        if (critObj[crit.id] !== undefined || critObj[crit.id.toLowerCase()] !== undefined) {
-          sumCriteriaPoints += val;
-          totalCriteriaEntries += 1;
-          criterionAverages[crit.id].total += val;
-          criterionAverages[crit.id].count += 1;
-        }
-      });
+      const jId = scoreRecord.judgeId || scoreRecord.judge_id;
+      const scoreVal = extractJudgeScore(scoreRecord);
+      sumJudgePoints += scoreVal;
+      if (jId) {
+        individualJudgeScores[jId] = scoreVal;
+      }
     });
 
-    SCORING_CRITERIA.forEach(crit => {
-      const c = criterionAverages[crit.id];
-      c.avg = c.count > 0 ? parseFloat((c.total / c.count).toFixed(2)) : 0;
-    });
+    const completedJudgesCount = candidateJudgeScores.length;
 
-    // Average score per criterion (out of 10)
-    const rawJudgeAverage = totalCriteriaEntries > 0 
-      ? (sumCriteriaPoints / totalCriteriaEntries) 
+    // Average score out of 50
+    const rawJudgeAverage = completedJudgesCount > 0 
+      ? (sumJudgePoints / completedJudgesCount) 
       : 0;
-    
-    // Normalized Judge Score (0 to 100%)
-    const normalizedJudgeScore = parseFloat(((rawJudgeAverage / 10) * 100).toFixed(2));
 
-    // B. Audience Vote Calculation for this candidate in this round
+    // Normalized Judge Score (0 to 100%)
+    const normalizedJudgeScore = parseFloat(((rawJudgeAverage / MAX_JUDGE_SCORE) * 100).toFixed(2));
+
+    // B. Audience Vote Calculation
     const candidateVotesCount = audienceVoteRecords.filter(v => 
       (v.candidateId || v.candidate_id) === candidateId
     ).length;
 
-    // Percentage share of total audience votes in round
     const audienceVoteShare = totalAudienceVotes > 0 
       ? parseFloat(((candidateVotesCount / totalAudienceVotes) * 100).toFixed(2))
       : 0;
     const normalizedAudienceScore = audienceVoteShare;
 
     // C. Final Round Weighted Score Formula:
-    // Weighted Judge = Normalized Judge % * (Judge Weightage % / 100)
-    // Weighted Audience = Audience Vote Share % * (Audience Weightage % / 100)
     const weightedJudge = parseFloat((normalizedJudgeScore * (judgeWeightage / 100)).toFixed(2));
     const weightedAudience = parseFloat((normalizedAudienceScore * (audienceWeightage / 100)).toFixed(2));
     const finalScore = parseFloat((weightedJudge + weightedAudience).toFixed(2));
 
-    const submittedJudgeIds = candidateJudgeScores.map(s => s.judgeId || s.judge_id);
-    const completedJudgesCount = new Set(submittedJudgeIds).size;
     const hasScores = candidateJudgeScores.length > 0 || candidateVotesCount > 0;
 
     return {
@@ -121,14 +129,18 @@ export function calculateRoundLeaderboard({ candidates = [], scores = [], round,
       photo: candidate.photo,
       category: candidate.category,
       style: candidate.style,
+      song: candidate.song,
       roundId,
       judgeWeightage,
       audienceWeightage,
       
-      // Scoring Metrics
-      rawJudgeAverage: parseFloat(rawJudgeAverage.toFixed(2)), // 0-10 scale
+      // Scoring Metrics (out of 50)
+      rawJudgeAverage: parseFloat(rawJudgeAverage.toFixed(2)), // 0-50 scale
+      judgeScoreOutOf50: parseFloat(rawJudgeAverage.toFixed(2)),
+      maxJudgeScore: MAX_JUDGE_SCORE,
       normalizedJudgeScore, // 0-100%
       weightedJudge, // out of judgeWeightage pts
+      individualJudgeScores,
       
       // Audience Metrics
       candidateVotesCount,
@@ -142,7 +154,6 @@ export function calculateRoundLeaderboard({ candidates = [], scores = [], round,
       hasScores,
 
       // Breakdown Details
-      criterionAverages,
       completedJudgesCount,
       activeJudgeCount,
       candidateScores: candidateJudgeScores,
@@ -168,6 +179,8 @@ export function calculateRoundLeaderboard({ candidates = [], scores = [], round,
       currentRank = i + 1;
     }
     results[i].rank = currentRank;
+    // Mark Top 10 qualification
+    results[i].isTop10Qualified = (i < 10);
   }
 
   return results;
@@ -175,7 +188,6 @@ export function calculateRoundLeaderboard({ candidates = [], scores = [], round,
 
 /**
  * Calculates the comprehensive cumulative leaderboard across all competition rounds (Round 1 and Round 2).
- * Accurately aggregates scores with their round-specific weightages.
  */
 export function calculateCumulativeLeaderboard({ candidates = [], scores = [], rounds = [], judges = [] }) {
   if (!candidates || candidates.length === 0) return [];
@@ -205,7 +217,7 @@ export function calculateCumulativeLeaderboard({ candidates = [], scores = [], r
     let totalCumulativePoints = 0;
 
     if (round1HasActivity && round2HasActivity) {
-      // Both rounds have taken place: Composite cumulative average (0-100)
+      // Both rounds: Composite cumulative average (0-100)
       cumulativeScore = parseFloat(((r1Score + r2Score) / 2).toFixed(2));
       totalCumulativePoints = parseFloat((r1Score + r2Score).toFixed(2));
     } else if (round2HasActivity) {
@@ -229,6 +241,7 @@ export function calculateCumulativeLeaderboard({ candidates = [], scores = [], r
       photo: candidate.photo,
       category: candidate.category,
       style: candidate.style,
+      song: candidate.song,
 
       // Round 1 Specifics
       round1: r1,
@@ -243,14 +256,16 @@ export function calculateCumulativeLeaderboard({ candidates = [], scores = [], r
       totalCumulativePoints,
       totalVotes,
       hasScores: (r1?.hasScores || false) || (r2?.hasScores || false),
+      isTop10Qualified: r1?.isTop10Qualified ?? false,
 
-      // Retain compatibility fields for generic display
+      // Compatibility fields
       finalScore: cumulativeScore,
       rawJudgeAverage: r2?.hasScores ? r2.rawJudgeAverage : (r1?.rawJudgeAverage || 0),
+      judgeScoreOutOf50: r2?.hasScores ? r2.rawJudgeAverage : (r1?.rawJudgeAverage || 0),
+      maxJudgeScore: MAX_JUDGE_SCORE,
       normalizedJudgeScore: r2?.hasScores ? r2.normalizedJudgeScore : (r1?.normalizedJudgeScore || 0),
       candidateVotesCount: totalVotes,
       audienceVoteShare: r2?.hasScores ? r2.audienceVoteShare : (r1?.audienceVoteShare || 0),
-      criterionAverages: r2?.hasScores ? r2.criterionAverages : (r1?.criterionAverages || {}),
       candidateScores: [...(r1?.candidateScores || []), ...(r2?.candidateScores || [])]
     };
   });
@@ -282,8 +297,22 @@ export function calculateCumulativeLeaderboard({ candidates = [], scores = [], r
 }
 
 /**
- * Backward compatibility alias for single round or overall
+ * Helper to get the top 10 qualified candidate IDs from Round 1 standings
  */
+export function getTop10QualifiedCandidateIds(round1Leaderboard = [], allCandidates = []) {
+  if (round1Leaderboard && round1Leaderboard.length >= 10) {
+    return round1Leaderboard.slice(0, 10).map(c => c.candidateId);
+  }
+  if (round1Leaderboard && round1Leaderboard.length > 0) {
+    const scoredIds = round1Leaderboard.map(c => c.candidateId);
+    const remaining = allCandidates
+      .filter(c => !scoredIds.includes(c.id))
+      .map(c => c.id);
+    return [...scoredIds, ...remaining].slice(0, 10);
+  }
+  return allCandidates.slice(0, 10).map(c => c.id);
+}
+
 export function calculateLeaderboard({ candidates, scores = [], round, judges = [] }) {
   if (round) {
     return calculateRoundLeaderboard({ candidates, scores, round, judges });

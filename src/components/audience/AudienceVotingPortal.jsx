@@ -7,7 +7,6 @@ import {
   Sparkles, 
   Search, 
   CheckCircle2, 
-  Flame, 
   Music, 
   Tag, 
   Lock, 
@@ -19,7 +18,9 @@ import {
 
 export default function AudienceVotingPortal() {
   const { 
-    candidates, 
+    candidates,
+    round1Candidates,
+    round2Candidates,
     rounds, 
     selectedRoundId, 
     currentRound, 
@@ -39,9 +40,11 @@ export default function AudienceVotingPortal() {
   const hasVoted = checkHasVotedInRound(activeRoundId);
   const votedCandidateId = getCandidateVotedInRound(activeRoundId);
   const isRoundLocked = activeRound?.status === 'locked' || activeRound?.status === 'completed';
-  const roundLabel = activeRound?.order 
-    ? `Round ${activeRound.order}` 
-    : (activeRound?.name?.toLowerCase().includes('round 2') || activeRoundId === 'round-2' ? 'Round 2' : 'Round 1');
+  const isRound2 = activeRoundId === 'round-2' || activeRound?.order === 2;
+  const roundLabel = isRound2 ? 'Round 2' : 'Round 1';
+
+  // Candidate pool: All 20 for Round 1; strictly Top 10 qualified for Round 2
+  const candidatePool = isRound2 ? (round2Candidates || []) : (round1Candidates || candidates);
 
   // Round audience votes
   const roundVotes = votes.filter(v => v.roundId === activeRoundId);
@@ -68,7 +71,7 @@ export default function AudienceVotingPortal() {
 
   const categories = ['all', 'Solo / Contemporary', 'Solo / Street & Popping', 'Solo / Latin Ballroom', 'Duo / Contemporary', 'Crew / Mega Crew'];
 
-  const filteredCandidates = candidates.filter(cand => {
+  const filteredCandidates = candidatePool.filter(cand => {
     if (selectedCategory !== 'all' && !cand.category.toLowerCase().includes(selectedCategory.toLowerCase().split('/')[1]?.trim() || '')) {
       return false;
     }
@@ -85,6 +88,7 @@ export default function AudienceVotingPortal() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20 px-2 sm:px-4">
+
       {/* Round Status Info Banner if locked */}
       {isRoundLocked && (
         <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-center gap-2 font-bold text-center shadow-lg">

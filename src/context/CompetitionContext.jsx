@@ -5,7 +5,13 @@ import {
   INITIAL_ROUNDS, 
   INITIAL_SCORES 
 } from '../utils/seedData';
-import { calculateRoundLeaderboard, calculateCumulativeLeaderboard, calculateLeaderboard } from '../utils/scoringEngine';
+import { 
+  calculateRoundLeaderboard, 
+  calculateCumulativeLeaderboard, 
+  calculateLeaderboard,
+  getTop10QualifiedCandidateIds,
+  MAX_JUDGE_SCORE 
+} from '../utils/scoringEngine';
 import { getSupabaseClient, getSupabaseConfig } from '../lib/supabaseClient';
 import { getVoterDeviceId } from '../utils/voterId';
 import { CompetitionContext, useCompetition } from './useCompetition';
@@ -25,9 +31,27 @@ const STORAGE_KEYS = {
 const BROADCAST_CHANNEL_NAME = 'dance_comp_sync_channel_v2';
 
 export function CompetitionProvider({ children }) {
-  // 1. Core State Initialization - all state defaults to empty and is loaded directly from the database
-  const [candidates, setCandidates] = useState([]);
-  const [judges, setJudges] = useState([]);
+  // 1. Core State Initialization - loaded from localStorage with initial defaults (20 candidates, 2 judges)
+  const [candidates, setCandidates] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CANDIDATES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_CANDIDATES;
+  });
+  const [judges, setJudges] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.JUDGES);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_JUDGES;
+  });
   const [rounds, setRounds] = useState(INITIAL_ROUNDS);
   const [scores, setScores] = useState(() => {
     try {
@@ -149,7 +173,7 @@ export function CompetitionProvider({ children }) {
       setIsSyncing(true);
       // Query Competitors
       const { data: dbCompetitors, error: compErr } = await client.from('competitors').select('*');
-      if (dbCompetitors) {
+      if (dbCompetitors && dbCompetitors.length > 0) {
         setCandidates(dbCompetitors.map(c => ({
           id: c.id,
           candidateNumber: c.candidate_number,
@@ -169,7 +193,7 @@ export function CompetitionProvider({ children }) {
 
       // Query Judges
       const { data: dbJudges, error: judgeErr } = await client.from('judges').select('*');
-      if (dbJudges) {
+      if (dbJudges && dbJudges.length > 0) {
         setJudges(dbJudges.map(j => ({
           id: j.id,
           name: j.name,
@@ -341,29 +365,57 @@ export function CompetitionProvider({ children }) {
   const round1 = rounds.find(r => r.order === 1 || r.id === 'round-1') || rounds[0];
   const round2 = rounds.find(r => r.order === 2 || r.id === 'round-2') || rounds[1];
 
-  // Specific Leaderboard for Round 1
+  // Round 1 Candidates pool: all 20 competitors
+  const round1Candidates = candidates;
+
+  // Specific Leaderboard for Round 1 (all 20 competitors)
   const round1Leaderboard = useMemo(() => calculateRoundLeaderboard({
-    candidates,
+    candidates: round1Candidates,
     scores,
     round: round1,
     judges
-  }), [candidates, scores, round1, judges]);
+  }), [round1Candidates, scores, round1, judges]);
 
-  // Specific Leaderboard for Round 2
+  // Top 10 candidate IDs qualified for Round 2 based on Round 1 score & standings
+  const top10QualifiedCandidateIds = useMemo(() => {
+    return getTop10QualifiedCandidateIds(round1Leaderboard, candidates);
+  }, [round1Leaderboard, candidates]);
+
+  const top10QualifiedSet = useMemo(() => new Set(top10QualifiedCandidateIds), [top10QualifiedCandidateIds]);
+
+  // Round 2 Candidates pool: strictly the Top 10 qualified finalists
+  const round2Candidates = useMemo(() => {
+    return candidates.filter(c => top10QualifiedSet.has(c.id));
+  }, [candidates, top10QualifiedSet]);
+
+  // Specific Leaderboard for Round 2 (strictly Top 10 finalists)
   const round2Leaderboard = useMemo(() => calculateRoundLeaderboard({
-    candidates,
+    candidates: round2Candidates,
     scores,
     round: round2,
     judges
-  }), [candidates, scores, round2, judges]);
+  }), [round2Candidates, scores, round2, judges]);
 
-  // Comprehensive Final Cumulative Leaderboard (All rounds weighted accurately)
+  // Comprehensive Final Cumulative Leaderboard
   const cumulativeLeaderboard = useMemo(() => calculateCumulativeLeaderboard({
     candidates,
     scores,
     rounds,
     judges
   }), [candidates, scores, rounds, judges]);
+
+  // Current active round candidates pool (20 for Round 1; Top 10 for Round 2)
+  const currentRoundCandidates = useMemo(() => {
+    if (currentRound?.order === 2 || currentRound?.id === 'round-2') {
+      return round2Candidates;
+    }
+    return round1Candidates;
+  }, [currentRound?.order, currentRound?.id, round1Candidates, round2Candidates]);
+
+  // Helper function to check if candidate is qualified for Round 2
+  const isCandidateQualifiedForRound2 = useCallback((candidateId) => {
+    return top10QualifiedSet.has(candidateId);
+  }, [top10QualifiedSet]);
 
   // Current active round leaderboard
   const currentLeaderboard = useMemo(() => {
@@ -750,16 +802,24 @@ export function CompetitionProvider({ children }) {
     return true;
   };
 
-  // Submit Judge Score
-  const submitJudgeScore = async ({ candidateId, judgeId, roundId, criteria, notes = '', songName = '' }) => {
+  // Submit Judge Score (Single 50-point score field)
+  const submitJudgeScore = async ({ candidateId, judgeId, roundId, score, criteria, notes = '', songName = '' }) => {
     const targetRound = rounds.find(r => r.id === roundId);
     if (targetRound?.status === 'locked') {
       showToast('Scoring is locked for this round!', 'error');
       return { success: false, message: 'Round is locked' };
     }
 
-    const rawValues = Object.values(criteria).map(Number);
-    const rawScore = rawValues.reduce((acc, curr) => acc + curr, 0) / rawValues.length;
+    let rawScore = 0;
+    if (score !== undefined && score !== null) {
+      rawScore = Number(score);
+    } else if (criteria?.score !== undefined) {
+      rawScore = Number(criteria.score);
+    } else if (criteria && typeof criteria === 'object') {
+      const vals = Object.values(criteria).map(Number).filter(n => !isNaN(n));
+      rawScore = vals.reduce((a, b) => a + b, 0);
+    }
+    const safeScore = Math.max(0, Math.min(50, parseFloat(rawScore.toFixed(2)) || 0));
 
     const stableId = `sc-jdg-${judgeId}-${candidateId}-${roundId}`;
 
@@ -770,8 +830,8 @@ export function CompetitionProvider({ children }) {
       roundId,
       sourceType: 'judge',
       voterFingerprint: null,
-      criteria,
-      rawScore: parseFloat(rawScore.toFixed(2)),
+      criteria: { score: safeScore },
+      rawScore: safeScore,
       notes,
       createdAt: new Date().toISOString()
     };
@@ -804,8 +864,8 @@ export function CompetitionProvider({ children }) {
           round_id: roundId,
           source_type: 'judge',
           voter_fingerprint: null,
-          criteria: criteria,
-          raw_score: scoreRecord.rawScore,
+          criteria: { score: safeScore },
+          raw_score: safeScore,
           notes: notes || ''
         });
         if (error) {
@@ -1010,6 +1070,11 @@ export function CompetitionProvider({ children }) {
         setSelectedRoundId,
         currentRound,
         activeJudge: (judges.find(j => j.id === authenticatedJudgeId) || judges.find(j => j.id === activeJudgeId) || judges[0]),
+        round1Candidates,
+        round2Candidates,
+        currentRoundCandidates,
+        top10QualifiedCandidateIds,
+        isCandidateQualifiedForRound2,
         currentLeaderboard,
         overallLeaderboard,
         round1Leaderboard,

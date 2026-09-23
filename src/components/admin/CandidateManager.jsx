@@ -23,7 +23,14 @@ import {
 } from 'lucide-react';
 
 export default function CandidateManager() {
-  const { candidates, addCandidate, updateCandidate, deleteCandidate, showToast } = useCompetition();
+  const { 
+    candidates, 
+    addCandidate, 
+    updateCandidate, 
+    deleteCandidate, 
+    isCandidateQualifiedForRound2,
+    showToast 
+  } = useCompetition();
 
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -250,6 +257,15 @@ export default function CandidateManager() {
                       <span className="px-1.5 py-0.5 rounded-md bg-slate-800 text-white text-[10px] font-bold border border-white/10">
                         Age: {candidate.age || 21}
                       </span>
+                      {isCandidateQualifiedForRound2(candidate.id) ? (
+                        <span className="px-2 py-0.5 rounded-md bg-pink-500/20 text-pink-300 border border-pink-500/40 text-[10px] font-bold ml-auto">
+                          Top 10 Finalist
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 border border-white/5 text-[10px] font-medium ml-auto">
+                          Round 1
+                        </span>
+                      )}
                     </div>
                     {/* Phone & Govt ID Box */}
                     <div className="bg-slate-950/80 p-2 rounded-xl border border-white/5 space-y-1.5">

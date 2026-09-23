@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useCompetition } from '../../context/CompetitionContext';
-import { SCORING_CRITERIA } from '../../utils/scoringEngine';
+import { MAX_JUDGE_SCORE, extractJudgeScore } from '../../utils/scoringEngine';
 import { 
   Trophy, 
   Crown, 
@@ -114,7 +114,7 @@ export default function LeaderboardView() {
         'Round Rank',
         'Candidate Number',
         'Name',
-        'Judge Raw Average (0-10)',
+        'Judge Raw Average (0-50)',
         'Normalized Judge Score (%)',
         `Judge Weighted Points (${activeRoundObj.judgeWeightage}%)`,
         'Audience Votes Count',
@@ -214,9 +214,9 @@ export default function LeaderboardView() {
           }`}
         >
           <Layers className="w-3.5 h-3.5 text-indigo-300" />
-          <span>Round 1 Leaderboard</span>
+          <span>Round 1 (20 Competitors)</span>
           <span className="text-[10px] px-1.5 py-0.2 rounded bg-black/30 font-mono">
-            {round1.judgeWeightage}J : {round1.audienceWeightage}A
+            Top 10 Advance
           </span>
           {round1.status === 'active' && (
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -233,9 +233,9 @@ export default function LeaderboardView() {
           }`}
         >
           <Layers className="w-3.5 h-3.5 text-pink-300" />
-          <span>Round 2 Leaderboard</span>
+          <span>Round 2 (Top 10 Finalists)</span>
           <span className="text-[10px] px-1.5 py-0.2 rounded bg-black/30 font-mono">
-            {round2.judgeWeightage}J : {round2.audienceWeightage}A
+            Championship
           </span>
           {round2.status === 'active' && (
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -296,7 +296,7 @@ export default function LeaderboardView() {
                   <div className="grid grid-cols-2 gap-2 text-[11px] pt-1.5 border-t border-white/5">
                     <div>
                       <span className="text-slate-400 block">Judges ({currentViewRound?.judgeWeightage}%):</span>
-                      <span className="font-bold text-indigo-300">{topThree[0].weightedJudge} pts ({topThree[0].rawJudgeAverage}/10)</span>
+                      <span className="font-bold text-indigo-300">{topThree[0].weightedJudge} pts ({topThree[0].rawJudgeAverage}/50)</span>
                     </div>
                     <div>
                       <span className="text-slate-400 block">Audience ({currentViewRound?.audienceWeightage}%):</span>
@@ -358,7 +358,7 @@ export default function LeaderboardView() {
                   <div className="grid grid-cols-2 gap-2 text-[11px] pt-1.5 border-t border-white/5">
                     <div>
                       <span className="text-slate-400 block">Judges ({currentViewRound?.judgeWeightage}%):</span>
-                      <span className="font-bold text-indigo-300">{topThree[1].weightedJudge} pts ({topThree[1].rawJudgeAverage}/10)</span>
+                      <span className="font-bold text-indigo-300">{topThree[1].weightedJudge} pts ({topThree[1].rawJudgeAverage}/50)</span>
                     </div>
                     <div>
                       <span className="text-slate-400 block">Audience ({currentViewRound?.audienceWeightage}%):</span>
@@ -420,7 +420,7 @@ export default function LeaderboardView() {
                   <div className="grid grid-cols-2 gap-2 text-[11px] pt-1.5 border-t border-white/5">
                     <div>
                       <span className="text-slate-400 block">Judges ({currentViewRound?.judgeWeightage}%):</span>
-                      <span className="font-bold text-indigo-300">{topThree[2].weightedJudge} pts ({topThree[2].rawJudgeAverage}/10)</span>
+                      <span className="font-bold text-indigo-300">{topThree[2].weightedJudge} pts ({topThree[2].rawJudgeAverage}/50)</span>
                     </div>
                     <div>
                       <span className="text-slate-400 block">Audience ({currentViewRound?.audienceWeightage}%):</span>
@@ -474,7 +474,7 @@ export default function LeaderboardView() {
                 <tr>
                   <th className="py-3 px-4 text-center">Rank</th>
                   <th className="py-3 px-4">Contestant</th>
-                  <th className="py-3 px-4 text-center">Judge Avg (0-10)</th>
+                  <th className="py-3 px-4 text-center">Judge Avg (0-50)</th>
                   <th className="py-3 px-4 text-center">Judge Weighted ({currentViewRound?.judgeWeightage}%)</th>
                   <th className="py-3 px-4 text-center">Audience Votes</th>
                   <th className="py-3 px-4 text-center">Audience Share (%)</th>
@@ -499,7 +499,7 @@ export default function LeaderboardView() {
                   </td>
                 </tr>
               ) : (
-                displayedLeaderboard.map((item) => {
+                displayedLeaderboard.map((item, index) => {
                   const isExpanded = expandedCandidateId === item.candidateId;
                   const isFirst = item.rank === 1;
                   const isSecond = item.rank === 2;
@@ -507,6 +507,17 @@ export default function LeaderboardView() {
 
                   return (
                     <React.Fragment key={item.candidateId}>
+                      {activeView === 'round-1' && index === 10 && (
+                        <tr key="cutoff-divider" className="bg-gradient-to-r from-pink-950/70 via-purple-950/70 to-indigo-950/70 border-y-2 border-pink-500/70">
+                          <td colSpan={8} className="py-3 px-4 text-center">
+                            <div className="flex items-center justify-center gap-3 text-xs font-black text-pink-300 tracking-wider">
+                              <span className="h-px w-12 bg-pink-500/60"></span>
+                              <span>⭐ TOP 10 ADVANCEMENT CUTOFF — Advanced to Round 2 Grand Finale ⭐</span>
+                              <span className="h-px w-12 bg-pink-500/60"></span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                       <tr 
                         onClick={() => toggleExpand(item.candidateId)}
                         className={`hover:bg-slate-800/50 cursor-pointer transition-colors ${
@@ -534,9 +545,25 @@ export default function LeaderboardView() {
                               className="w-10 h-10 rounded-xl object-cover ring-1 ring-white/10"
                             />
                             <div>
-                              <div className="flex items-center gap-1.5">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-mono text-pink-400 font-bold text-[11px]">{item.candidateNumber}</span>
                                 <span className="font-bold text-white text-sm">{item.name}</span>
+                                {activeView === 'round-1' && (
+                                  item.rank <= 10 ? (
+                                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                                      Top 10 Qualified
+                                    </span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-slate-800 text-slate-400 border border-white/5">
+                                      Eliminated
+                                    </span>
+                                  )
+                                )}
+                                {activeView === 'round-2' && (
+                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/40">
+                                    Finalist
+                                  </span>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -586,7 +613,7 @@ export default function LeaderboardView() {
                           <>
                             {/* Judge Avg */}
                             <td className="py-3.5 px-4 text-center font-mono font-bold text-indigo-300">
-                              {item.rawJudgeAverage.toFixed(2)} / 10
+                              {item.rawJudgeAverage.toFixed(2)} / 50
                             </td>
 
                             {/* Judge Weighted */}
@@ -654,7 +681,7 @@ export default function LeaderboardView() {
                                       <div className="p-2 bg-slate-950/70 rounded-xl border border-white/5">
                                         <span className="text-slate-400 block text-[11px]">Judge Average ({round1.judgeWeightage}%):</span>
                                         <span className="font-mono font-bold text-indigo-300">
-                                          {item.round1?.rawJudgeAverage.toFixed(2)} / 10 ({item.round1?.normalizedJudgeScore}%)
+                                          {item.round1?.rawJudgeAverage.toFixed(2)} / 50 ({item.round1?.normalizedJudgeScore}%)
                                         </span>
                                         <span className="block text-[10px] text-slate-500 mt-0.5">
                                           Weighted: {item.round1?.weightedJudge.toFixed(2)} / {round1.judgeWeightage} pts
@@ -672,24 +699,11 @@ export default function LeaderboardView() {
                                       </div>
                                     </div>
 
-                                    {/* 5-Criteria Bars for Round 1 */}
-                                    {item.round1?.criterionAverages && (
-                                      <div className="space-y-1.5 pt-1">
-                                        <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block">
-                                          Round 1 Criteria Scores:
-                                        </span>
-                                        <div className="grid grid-cols-5 gap-1 text-[10px]">
-                                          {SCORING_CRITERIA.map(c => (
-                                            <div key={c.id} className="p-1 bg-slate-950 rounded text-center">
-                                              <span className="text-slate-400 block truncate">{c.label.split('/')[0]}</span>
-                                              <span className="font-mono font-bold text-indigo-300">
-                                                {item.round1.criterionAverages[c.id]?.avg || 0}
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
+                                    {/* Single 50-point score summary for Round 1 */}
+                                    <div className="pt-1 text-[11px] text-slate-400 font-mono flex items-center justify-between border-t border-white/5">
+                                      <span>Round 1 Score:</span>
+                                      <span className="text-indigo-300 font-bold">{item.round1?.rawJudgeAverage.toFixed(2)} / 50</span>
+                                    </div>
                                   </div>
 
                                   {/* Round 2 Card */}
@@ -708,7 +722,7 @@ export default function LeaderboardView() {
                                       <div className="p-2 bg-slate-950/70 rounded-xl border border-white/5">
                                         <span className="text-slate-400 block text-[11px]">Judge Average ({round2.judgeWeightage}%):</span>
                                         <span className="font-mono font-bold text-indigo-300">
-                                          {item.round2?.rawJudgeAverage.toFixed(2)} / 10 ({item.round2?.normalizedJudgeScore}%)
+                                          {item.round2?.rawJudgeAverage.toFixed(2)} / 50 ({item.round2?.normalizedJudgeScore}%)
                                         </span>
                                         <span className="block text-[10px] text-slate-500 mt-0.5">
                                           Weighted: {item.round2?.weightedJudge.toFixed(2)} / {round2.judgeWeightage} pts
@@ -726,24 +740,11 @@ export default function LeaderboardView() {
                                       </div>
                                     </div>
 
-                                    {/* 5-Criteria Bars for Round 2 */}
-                                    {item.round2?.criterionAverages && (
-                                      <div className="space-y-1.5 pt-1">
-                                        <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block">
-                                          Round 2 Criteria Scores:
-                                        </span>
-                                        <div className="grid grid-cols-5 gap-1 text-[10px]">
-                                          {SCORING_CRITERIA.map(c => (
-                                            <div key={c.id} className="p-1 bg-slate-950 rounded text-center">
-                                              <span className="text-slate-400 block truncate">{c.label.split('/')[0]}</span>
-                                              <span className="font-mono font-bold text-pink-300">
-                                                {item.round2.criterionAverages[c.id]?.avg || 0}
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
+                                    {/* Single 50-point score summary for Round 2 */}
+                                    <div className="pt-1 text-[11px] text-slate-400 font-mono flex items-center justify-between border-t border-white/5">
+                                      <span>Round 2 Score:</span>
+                                      <span className="text-pink-300 font-bold">{item.round2?.rawJudgeAverage.toFixed(2)} / 50</span>
+                                    </div>
                                   </div>
                                 </div>
 
@@ -765,26 +766,51 @@ export default function LeaderboardView() {
                               <div className="space-y-4">
                                 <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
                                   <Sparkles className="w-3.5 h-3.5 text-pink-400" />
-                                  <span>5-Criterion Breakdown (Averaged across evaluating judges)</span>
+                                  <span>Official Judge Score Evaluations (Out of 50)</span>
                                 </h4>
 
-                                {/* 5-Criteria Progress Bars */}
-                                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
-                                  {SCORING_CRITERIA.map(crit => {
-                                    const avg = item.criterionAverages[crit.id]?.avg || 0;
-                                    const pct = (avg / 10) * 100;
+                                {/* Individual Judge Scores (0-50) */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                  {judges.map(judge => {
+                                    const scoreRec = (item.candidateScores || []).find(s => (s.judgeId === judge.id || s.judge_id === judge.id));
+                                    const scoreVal = scoreRec ? extractJudgeScore(scoreRec) : null;
+                                    const hasScore = scoreVal !== null;
+
                                     return (
-                                      <div key={crit.id} className="bg-slate-900 p-3 rounded-xl border border-white/5 space-y-1.5">
-                                        <div className="flex items-center justify-between text-[11px]">
-                                          <span className="text-slate-300 font-medium truncate">{crit.label}</span>
-                                          <span className="font-mono font-bold text-indigo-300">{avg} / 10</span>
+                                      <div key={judge.id} className="bg-slate-900 p-3.5 rounded-2xl border border-white/5 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2">
+                                            <img 
+                                              src={judge.avatar} 
+                                              alt={judge.name} 
+                                              className="w-7 h-7 rounded-lg object-cover ring-1 ring-white/10" 
+                                            />
+                                            <div>
+                                              <span className="font-bold text-white text-xs block">{judge.name}</span>
+                                              <span className="text-[10px] text-slate-400">{judge.title || 'Judge'}</span>
+                                            </div>
+                                          </div>
+                                          <div className="text-right">
+                                            {hasScore ? (
+                                              <span className="font-mono font-black text-indigo-300 text-sm">
+                                                {scoreVal.toFixed(1)} <span className="text-xs text-slate-400 font-normal">/ 50</span>
+                                              </span>
+                                            ) : (
+                                              <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-lg border border-amber-500/20">
+                                                Pending
+                                              </span>
+                                            )}
+                                          </div>
                                         </div>
-                                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                          <div 
-                                            className="h-full bg-gradient-to-r from-indigo-500 to-pink-500 rounded-full"
-                                            style={{ width: `${pct}%` }}
-                                          />
-                                        </div>
+
+                                        {hasScore && (
+                                          <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                            <div 
+                                              className="h-full bg-gradient-to-r from-indigo-500 to-pink-500 rounded-full"
+                                              style={{ width: `${Math.min(100, (scoreVal / 50) * 100)}%` }}
+                                            />
+                                          </div>
+                                        )}
                                       </div>
                                     );
                                   })}

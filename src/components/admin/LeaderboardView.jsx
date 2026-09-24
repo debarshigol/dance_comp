@@ -440,9 +440,6 @@ export default function LeaderboardView() {
                 : `${currentViewRound?.name} Complete Standings`}
             </span>
           </span>
-          <span className="text-[11px] text-slate-400">
-            Click candidate row to view detailed round breakdown & criteria evaluations
-          </span>
         </div>
 
         <div className="overflow-x-auto">
@@ -543,22 +540,6 @@ export default function LeaderboardView() {
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-mono text-pink-400 font-bold text-[11px]">{item.candidateNumber}</span>
                                 <span className="font-bold text-white text-sm">{item.name}</span>
-                                {activeView === 'round-1' && (
-                                  item.rank <= 10 ? (
-                                    <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                                      Top 10 Qualified
-                                    </span>
-                                  ) : (
-                                    <span className="px-1.5 py-0.2 rounded text-[10px] font-medium bg-slate-800 text-slate-400 border border-white/5">
-                                      Eliminated
-                                    </span>
-                                  )
-                                )}
-                                {activeView === 'round-2' && (
-                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-pink-500/20 text-pink-300 border border-pink-500/40">
-                                    Finalist
-                                  </span>
-                                )}
                               </div>
                             </div>
                           </div>

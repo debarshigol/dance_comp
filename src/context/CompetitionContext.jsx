@@ -1,16 +1,16 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { 
-  INITIAL_CANDIDATES, 
-  INITIAL_JUDGES, 
-  INITIAL_ROUNDS, 
-  INITIAL_SCORES 
+import {
+  INITIAL_CANDIDATES,
+  INITIAL_JUDGES,
+  INITIAL_ROUNDS,
+  INITIAL_SCORES
 } from '../utils/seedData';
-import { 
-  calculateRoundLeaderboard, 
-  calculateCumulativeLeaderboard, 
+import {
+  calculateRoundLeaderboard,
+  calculateCumulativeLeaderboard,
   calculateLeaderboard,
   getTop10QualifiedCandidateIds,
-  MAX_JUDGE_SCORE 
+  MAX_JUDGE_SCORE
 } from '../utils/scoringEngine';
 import { getSupabaseClient, getSupabaseConfig } from '../lib/supabaseClient';
 import { getVoterDeviceId } from '../utils/voterId';
@@ -37,9 +37,9 @@ export function CompetitionProvider({ children }) {
       const saved = localStorage.getItem(STORAGE_KEYS.CANDIDATES);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
-    } catch (e) {}
+    } catch (e) { }
     return INITIAL_CANDIDATES;
   });
   const [judges, setJudges] = useState(() => {
@@ -47,9 +47,9 @@ export function CompetitionProvider({ children }) {
       const saved = localStorage.getItem(STORAGE_KEYS.JUDGES);
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed)) return parsed;
       }
-    } catch (e) {}
+    } catch (e) { }
     return INITIAL_JUDGES;
   });
   const [rounds, setRounds] = useState(() => {
@@ -64,7 +64,7 @@ export function CompetitionProvider({ children }) {
           }));
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     return INITIAL_ROUNDS;
   });
   const [scores, setScores] = useState(() => {
@@ -118,7 +118,7 @@ export function CompetitionProvider({ children }) {
   // Current selected Judge for Judge Portal
   const [activeJudgeId, setActiveJudgeId] = useState(() => {
     const saved = localStorage.getItem(STORAGE_KEYS.ACTIVE_JUDGE_ID);
-    return saved || 'j-01';
+    return saved || '';
   });
 
   // Selected Round ID (defaults to 'round-1')
@@ -224,16 +224,36 @@ export function CompetitionProvider({ children }) {
       // Query Rounds
       const { data: dbRounds, error: roundErr } = await client.from('competition_rounds').select('*').order('order_num', { ascending: true });
       if (dbRounds && dbRounds.length > 0) {
-        setRounds(dbRounds.map(r => ({
-          id: r.id,
-          name: r.name,
-          description: r.description,
-          status: r.status,
-          judgeWeightage: r.judge_weightage,
-          audienceWeightage: r.audience_weightage,
-          isCurrent: r.is_current,
-          order: r.order_num
-        })));
+        setRounds(prevRounds => {
+          return dbRounds.map(r => {
+            const existingRound = (prevRounds || []).find(pr => pr.id === r.id);
+            const descLive = typeof r.description === 'string' && r.description.includes('[AUDIENCE_LIVE:true]');
+            const descNotLive = typeof r.description === 'string' && r.description.includes('[AUDIENCE_LIVE:false]');
+
+            let isAudienceLive = false;
+            if (r.is_audience_live !== undefined && r.is_audience_live !== null) {
+              isAudienceLive = Boolean(r.is_audience_live);
+            } else if (descLive) {
+              isAudienceLive = true;
+            } else if (descNotLive) {
+              isAudienceLive = false;
+            } else if (existingRound?.isAudienceLive !== undefined) {
+              isAudienceLive = Boolean(existingRound.isAudienceLive);
+            }
+
+            return {
+              id: r.id,
+              name: r.name,
+              description: r.description,
+              status: r.status,
+              judgeWeightage: r.judge_weightage,
+              audienceWeightage: r.audience_weightage,
+              isCurrent: r.is_current,
+              isAudienceLive,
+              order: r.order_num
+            };
+          });
+        });
       }
 
       // Query Unified Scores Table
@@ -265,7 +285,7 @@ export function CompetitionProvider({ children }) {
           const merged = Array.from(map.values());
           try {
             localStorage.setItem(STORAGE_KEYS.SCORES, JSON.stringify(merged));
-          } catch (e) {}
+          } catch (e) { }
           return merged;
         });
       }
@@ -359,14 +379,19 @@ export function CompetitionProvider({ children }) {
     }
   }, [selectedRoundId]);
 
+  // Check if any round has audience voting actively live
+  const audienceLiveRound = rounds.find(r => r.isAudienceLive);
+
   // The system's live active competition round (set by admin)
-  const liveRound = rounds.find(r => r.isCurrent) || rounds.find(r => r.status === 'active') || rounds[0];
+  const liveRound = (activeRole === 'audience' && audienceLiveRound)
+    ? audienceLiveRound
+    : (rounds.find(r => r.isAudienceLive) || rounds.find(r => r.isCurrent) || rounds.find(r => r.status === 'active') || rounds[0]);
 
   // For judge, audience, and stage: always follow the system's live competition round set by admin!
   const currentRound = (activeRole === 'audience' || activeRole === 'judge' || activeRole === 'stage')
     ? liveRound
     : (rounds.find(r => r.id === selectedRoundId) || liveRound);
-  const activeJudge = judges.find(j => j.id === activeJudgeId) || judges[0];
+  const activeJudge = judges.find(j => j.id === activeJudgeId) || judges[0] || null;
 
   // Auto-sync selectedRoundId to liveRound for judge, audience, and stage
   useEffect(() => {
@@ -467,8 +492,8 @@ export function CompetitionProvider({ children }) {
     const cleanId = (identifier || '').trim().toLowerCase();
     const cleanPass = (password || '').trim();
 
-    const matchedJudge = judges.find(j => 
-      j.accessCode.toLowerCase() === cleanId || 
+    const matchedJudge = judges.find(j =>
+      j.accessCode.toLowerCase() === cleanId ||
       (j.email && j.email.toLowerCase() === cleanId) ||
       j.id.toLowerCase() === cleanId
     );
@@ -690,7 +715,7 @@ export function CompetitionProvider({ children }) {
       return updated;
     });
     setScores(prev => prev.filter(s => s.judgeId !== id && s.judge_id !== id));
-    
+
     if (authenticatedJudgeId === id) {
       setAuthenticatedJudgeId(null);
       localStorage.removeItem('dance_comp_auth_judge_id_v2');
@@ -745,7 +770,8 @@ export function CompetitionProvider({ children }) {
         ...r,
         isCurrent: r.id === id,
         // The newly activated round is active; all previous/other rounds become locked
-        status: r.id === id ? 'active' : 'locked'
+        status: r.id === id ? 'active' : 'locked',
+        isAudienceLive: r.id === id ? r.isAudienceLive : false
       }));
       broadcastSync('SYNC_ALL', { rounds: updated });
       return updated;
@@ -791,35 +817,75 @@ export function CompetitionProvider({ children }) {
     let nowLive = false;
     let roundLabelName = roundId === 'round-2' ? 'Round 2' : 'Round 1';
 
-    setRounds(prev => {
-      const target = prev.find(r => r.id === roundId);
-      nowLive = !Boolean(target?.isAudienceLive);
+    const target = rounds.find(r => r.id === roundId);
+    nowLive = !Boolean(target?.isAudienceLive);
 
+    setRounds(prev => {
       const updated = prev.map(r => {
         if (r.id === roundId) {
           return {
             ...r,
-            isAudienceLive: nowLive
+            isAudienceLive: nowLive,
+            status: nowLive ? 'active' : r.status,
+            isCurrent: nowLive ? true : r.isCurrent
           };
         }
-        return r;
+        return {
+          ...r,
+          isAudienceLive: nowLive ? false : r.isAudienceLive,
+          isCurrent: nowLive ? false : r.isCurrent
+        };
       });
 
       broadcastSync('SYNC_ALL', { rounds: updated });
       return updated;
     });
 
+    if (nowLive) {
+      setSelectedRoundId(roundId);
+    }
+
     const client = getSupabaseClient();
     if (client) {
       try {
-        await client.from('competition_rounds').update({ is_audience_live: nowLive }).eq('id', roundId);
+        const targetDesc = target?.description || '';
+        const cleanTargetDesc = targetDesc.replace(/\s*\[AUDIENCE_LIVE:(true|false)\]/g, '');
+        const updatedTargetDesc = cleanTargetDesc + (nowLive ? ' [AUDIENCE_LIVE:true]' : ' [AUDIENCE_LIVE:false]');
+
+        const targetUpdate = {
+          description: updatedTargetDesc,
+          status: nowLive ? 'active' : (target?.status || 'active'),
+          is_current: nowLive ? true : Boolean(target?.isCurrent)
+        };
+
+        // Try update with is_audience_live column first; fallback if column does not exist
+        let res = await client.from('competition_rounds').update({ ...targetUpdate, is_audience_live: nowLive }).eq('id', roundId);
+        if (res.error) {
+          await client.from('competition_rounds').update(targetUpdate).eq('id', roundId);
+        }
+
+        // When making a round live, turn off audience live on other rounds
+        if (nowLive) {
+          const otherRounds = rounds.filter(r => r.id !== roundId);
+          for (const other of otherRounds) {
+            const cleanOtherDesc = (other.description || '').replace(/\s*\[AUDIENCE_LIVE:(true|false)\]/g, '');
+            const otherUpdate = {
+              description: cleanOtherDesc + ' [AUDIENCE_LIVE:false]',
+              is_current: false
+            };
+            let otherRes = await client.from('competition_rounds').update({ ...otherUpdate, is_audience_live: false }).eq('id', other.id);
+            if (otherRes.error) {
+              await client.from('competition_rounds').update(otherUpdate).eq('id', other.id);
+            }
+          }
+        }
       } catch (e) {
         console.warn('Supabase toggle audience live error:', e);
       }
     }
 
     showToast(
-      nowLive 
+      nowLive
         ? `Audience voting for ${roundLabelName} is now LIVE! Fans can cast votes.`
         : `Audience voting for ${roundLabelName} is now CLOSED.`,
       nowLive ? 'success' : 'info'
@@ -891,14 +957,14 @@ export function CompetitionProvider({ children }) {
 
     setScores(prev => {
       const filtered = (prev || []).filter(s => !(
-        (s.candidateId === candidateId || s.candidate_id === candidateId) && 
-        (s.judgeId === judgeId || s.judge_id === judgeId) && 
+        (s.candidateId === candidateId || s.candidate_id === candidateId) &&
+        (s.judgeId === judgeId || s.judge_id === judgeId) &&
         (s.roundId === roundId || s.round_id === roundId)
       ));
       const updated = [...filtered, scoreRecord];
       try {
         localStorage.setItem(STORAGE_KEYS.SCORES, JSON.stringify(updated));
-      } catch (e) {}
+      } catch (e) { }
       broadcastSync('NEW_SCORE_RECORD', scoreRecord);
       return updated;
     });
@@ -939,9 +1005,9 @@ export function CompetitionProvider({ children }) {
     const deviceId = getVoterDeviceId();
     const hasLocal = typeof window !== 'undefined' && localStorage.getItem(`dance_comp_voted_${deviceId}_${roundId}`) === 'true';
     if (hasLocal) return true;
-    return scores.some(s => 
-      (s.roundId === roundId || s.round_id === roundId) && 
-      (s.sourceType === 'audience' || s.source_type === 'audience') && 
+    return scores.some(s =>
+      (s.roundId === roundId || s.round_id === roundId) &&
+      (s.sourceType === 'audience' || s.source_type === 'audience') &&
       (s.voterFingerprint === deviceId || s.voter_fingerprint === deviceId)
     );
   };
@@ -951,9 +1017,9 @@ export function CompetitionProvider({ children }) {
     const deviceId = getVoterDeviceId();
     const localCandidateId = typeof window !== 'undefined' ? localStorage.getItem(`dance_comp_voted_candidate_${deviceId}_${roundId}`) : null;
     if (localCandidateId) return localCandidateId;
-    const vote = scores.find(s => 
-      (s.roundId === roundId || s.round_id === roundId) && 
-      (s.sourceType === 'audience' || s.source_type === 'audience') && 
+    const vote = scores.find(s =>
+      (s.roundId === roundId || s.round_id === roundId) &&
+      (s.sourceType === 'audience' || s.source_type === 'audience') &&
       (s.voterFingerprint === deviceId || s.voter_fingerprint === deviceId)
     );
     return vote ? (vote.candidateId || vote.candidate_id) : null;
@@ -961,8 +1027,8 @@ export function CompetitionProvider({ children }) {
 
   const castAudienceVote = async (candidateId, roundId = currentRound?.id || selectedRoundId) => {
     const targetRound = rounds.find(r => r.id === roundId);
-    if (!targetRound || targetRound.status === 'locked' || targetRound.status === 'completed') {
-      showToast(`Voting is locked and closed for ${roundId === 'round-2' ? 'Round 2' : 'Round 1'}!`, 'error');
+    if (!targetRound || targetRound.status === 'completed') {
+      showToast(`Voting is completed for ${roundId === 'round-2' ? 'Round 2' : 'Round 1'}!`, 'error');
       return { success: false, message: 'Voting is closed for this round.' };
     }
 
@@ -1009,7 +1075,7 @@ export function CompetitionProvider({ children }) {
       const updated = [...filtered, newVoteRecord];
       try {
         localStorage.setItem(STORAGE_KEYS.SCORES, JSON.stringify(updated));
-      } catch (e) {}
+      } catch (e) { }
       broadcastSync('NEW_SCORE_RECORD', newVoteRecord);
       return updated;
     });

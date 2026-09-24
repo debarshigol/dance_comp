@@ -15,7 +15,8 @@ export function AppContent() {
     setActiveRole,
     isAdminAuthenticated,
     judges,
-    setActiveJudgeId
+    setActiveJudgeId,
+    setSelectedRoundId
   } = useCompetition();
 
   const isInitialMount = useRef(true);
@@ -29,6 +30,7 @@ export function AppContent() {
       const params = new URLSearchParams(window.location.search);
       const roleParam = params.get('role');
       const codeParam = params.get('code');
+      const roundParam = params.get('round');
 
       if (roleParam && ['admin', 'judge', 'audience', 'stage'].includes(roleParam.toLowerCase())) {
         setActiveRole(roleParam.toLowerCase());
@@ -40,6 +42,10 @@ export function AppContent() {
         setActiveRole('stage');
       } else if (pathname === '/' && !roleParam) {
         setActiveRole('admin');
+      }
+
+      if (roundParam && ['round-1', 'round-2'].includes(roundParam.toLowerCase())) {
+        setSelectedRoundId(roundParam.toLowerCase());
       }
 
       if (codeParam && judges.length > 0) {
@@ -54,7 +60,7 @@ export function AppContent() {
     syncFromLocation();
     window.addEventListener('popstate', syncFromLocation);
     return () => window.removeEventListener('popstate', syncFromLocation);
-  }, [judges, setActiveJudgeId, setActiveRole]);
+  }, [judges, setActiveJudgeId, setActiveRole, setSelectedRoundId]);
 
   // Update browser URL bar on user role changes (skipping initial mount)
   useEffect(() => {

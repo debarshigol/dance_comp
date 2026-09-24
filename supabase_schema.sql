@@ -47,9 +47,13 @@ CREATE TABLE IF NOT EXISTS competition_rounds (
   judge_weightage INT DEFAULT 60,
   audience_weightage INT DEFAULT 40,
   is_current BOOLEAN DEFAULT FALSE,
+  is_audience_live BOOLEAN DEFAULT FALSE,
   order_num INT DEFAULT 1,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Ensure is_audience_live column exists if table was previously created
+ALTER TABLE competition_rounds ADD COLUMN IF NOT EXISTS is_audience_live BOOLEAN DEFAULT FALSE;
 
 -- 4. UNIFIED SCORES TABLE (Stores both Judge Multi-Criteria Evaluations and Audience Votes)
 CREATE TABLE IF NOT EXISTS scores (

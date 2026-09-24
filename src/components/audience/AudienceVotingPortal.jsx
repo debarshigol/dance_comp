@@ -1,35 +1,35 @@
 import React, { useState } from 'react';
 import confetti from 'canvas-confetti';
 import { useCompetition } from '../../context/CompetitionContext';
-import { 
-  Vote, 
-  Heart, 
-  Sparkles, 
-  Search, 
-  CheckCircle2, 
-  Music, 
-  Tag, 
-  Lock, 
-  Unlock, 
-  BarChart2, 
+import {
+  Vote,
+  Heart,
+  Sparkles,
+  Search,
+  CheckCircle2,
+  Music,
+  Tag,
+  Lock,
+  Unlock,
+  BarChart2,
   Smartphone,
   Eye,
   Radio
 } from 'lucide-react';
 
 export default function AudienceVotingPortal() {
-  const { 
+  const {
     candidates,
     round1Candidates,
     round2Candidates,
-    rounds, 
-    selectedRoundId, 
-    currentRound, 
-    votes, 
-    castAudienceVote, 
-    checkHasVotedInRound, 
+    rounds,
+    selectedRoundId,
+    currentRound,
+    votes,
+    castAudienceVote,
+    checkHasVotedInRound,
     getCandidateVotedInRound,
-    currentLeaderboard 
+    currentLeaderboard
   } = useCompetition();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,8 +40,8 @@ export default function AudienceVotingPortal() {
   const activeRoundId = activeRound?.id || selectedRoundId || 'round-1';
   const hasVoted = checkHasVotedInRound(activeRoundId);
   const votedCandidateId = getCandidateVotedInRound(activeRoundId);
-  const isRoundLocked = activeRound?.status === 'locked' || activeRound?.status === 'completed';
   const isAudienceLive = Boolean(activeRound?.isAudienceLive);
+  const isRoundLocked = (activeRound?.status === 'locked' || activeRound?.status === 'completed') && !isAudienceLive;
   const isRound2 = activeRoundId === 'round-2' || activeRound?.order === 2;
   const roundLabel = isRound2 ? 'Round 2' : 'Round 1';
 
@@ -154,11 +154,10 @@ export default function AudienceVotingPortal() {
             return (
               <div
                 key={candidate.id}
-                className={`glass-card rounded-3xl overflow-hidden flex flex-col justify-between border transition-all ${
-                  isVotedForThis 
-                    ? 'border-pink-500 ring-2 ring-pink-500/40 bg-pink-950/20' 
+                className={`glass-card rounded-3xl overflow-hidden flex flex-col justify-between border transition-all ${isVotedForThis
+                    ? 'border-pink-500 ring-2 ring-pink-500/40 bg-pink-950/20'
                     : 'border-white/10 hover:border-pink-500/30'
-                }`}
+                  }`}
               >
                 <div>
                   {/* Photo */}
@@ -218,15 +217,14 @@ export default function AudienceVotingPortal() {
                       type="button"
                       onClick={() => handleVote(candidate.id, candidate.name)}
                       disabled={isRoundLocked || !isAudienceLive || hasVoted}
-                      className={`w-full py-2.5 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
-                        hasVoted
+                      className={`w-full py-2.5 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${hasVoted
                           ? 'bg-slate-800/80 text-slate-500 cursor-not-allowed border border-white/5'
                           : isRoundLocked
-                          ? 'bg-slate-800/80 text-slate-500 cursor-not-allowed border border-white/5'
-                          : !isAudienceLive
-                          ? 'bg-slate-800/90 text-amber-300/90 border border-amber-500/30 cursor-not-allowed'
-                          : 'bg-gradient-to-r from-pink-600 via-rose-500 to-pink-600 hover:from-pink-500 hover:to-rose-400 text-white shadow-lg shadow-pink-600/30 hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
-                      }`}
+                            ? 'bg-slate-800/80 text-slate-500 cursor-not-allowed border border-white/5'
+                            : !isAudienceLive
+                              ? 'bg-slate-800/90 text-amber-300/90 border border-amber-500/30 cursor-not-allowed'
+                              : 'bg-gradient-to-r from-pink-600 via-rose-500 to-pink-600 hover:from-pink-500 hover:to-rose-400 text-white shadow-lg shadow-pink-600/30 hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
+                        }`}
                     >
                       {isRoundLocked ? (
                         <>

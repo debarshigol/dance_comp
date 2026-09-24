@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { useCompetition } from '../../context/CompetitionContext';
-import { ShieldCheck, Lock, Mail, Key, Sparkles } from 'lucide-react';
+import { ShieldCheck, Lock, Mail, Key } from 'lucide-react';
 
 export default function AdminLogin() {
   const { loginAdmin } = useCompetition();
-  const [email, setEmail] = useState('admin@dancefest.org');
-  const [password, setPassword] = useState('admin123');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
   const handleSubmit = (e) => {
@@ -52,7 +52,8 @@ export default function AdminLogin() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@dancefest.org"
+                placeholder="Enter admin email"
+                autoComplete="email"
                 className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition-all"
               />
             </div>
@@ -69,7 +70,8 @@ export default function AdminLogin() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="Enter password"
+                autoComplete="current-password"
                 className="w-full pl-10 pr-4 py-3 bg-slate-900/90 border border-white/10 rounded-xl text-white text-sm focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition-all"
               />
             </div>
@@ -77,25 +79,11 @@ export default function AdminLogin() {
 
           <button
             type="submit"
-            className="w-full py-3.5 px-4 bg-gradient-to-r from-pink-600 via-rose-500 to-amber-500 hover:from-pink-500 hover:to-amber-400 text-white font-bold rounded-xl shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40 transition-all flex items-center justify-center gap-2 text-sm mt-2"
+            className="w-full py-3.5 px-4 bg-gradient-to-r from-pink-600 via-rose-500 to-amber-500 hover:from-pink-500 hover:to-amber-400 text-white font-bold rounded-xl shadow-lg shadow-pink-500/25 hover:shadow-pink-500/40 transition-all flex items-center justify-center gap-2 text-sm mt-2 cursor-pointer"
           >
             <Lock className="w-4 h-4" />
             <span>Authenticate Admin Session</span>
           </button>
-
-          <div className="pt-4 text-center">
-            <button
-              type="button"
-              onClick={() => {
-                setEmail('admin@dancefest.org');
-                setPassword('admin123');
-              }}
-              className="text-xs text-pink-400 hover:text-pink-300 inline-flex items-center gap-1 font-medium"
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              Click here to auto-fill default demo credentials
-            </button>
-          </div>
         </form>
       </div>
     </div>

@@ -315,6 +315,7 @@ export const INITIAL_ROUNDS = [
     judgeWeightage: 70,
     audienceWeightage: 30,
     isCurrent: true,
+    isAudienceLive: false,
     order: 1
   },
   {
@@ -325,6 +326,7 @@ export const INITIAL_ROUNDS = [
     judgeWeightage: 50,
     audienceWeightage: 50,
     isCurrent: false,
+    isAudienceLive: false,
     order: 2
   }
 ];

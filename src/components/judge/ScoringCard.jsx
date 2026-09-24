@@ -17,13 +17,13 @@ export default function ScoringCard({
   judgeName,
   roundName
 }) {
-  // Extract existing score or baseline at 40
+  // Extract existing score or keep blank
   const [score, setScore] = useState(() => {
     if (existingScore) {
       const extracted = extractJudgeScore(existingScore);
       if (extracted > 0) return extracted;
     }
-    return 40;
+    return '';
   });
 
   const [notes, setNotes] = useState(() => existingScore?.notes || existingScore?.comment || '');
@@ -32,8 +32,11 @@ export default function ScoringCard({
   useEffect(() => {
     if (existingScore) {
       const extracted = extractJudgeScore(existingScore);
-      if (extracted > 0) setScore(extracted);
+      setScore(extracted > 0 ? extracted : '');
       setNotes(existingScore.notes || existingScore.comment || '');
+    } else {
+      setScore('');
+      setNotes('');
     }
   }, [existingScore]);
 
@@ -51,8 +54,8 @@ export default function ScoringCard({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (isLocked) return;
-    const finalScore = score === '' ? 0 : Math.min(MAX_JUDGE_SCORE, Math.max(0, Number(score)));
+    if (isLocked || score === '') return;
+    const finalScore = Math.min(MAX_JUDGE_SCORE, Math.max(0, Number(score)));
     onSave({ score: finalScore, criteria: { score: finalScore }, notes, songName });
   };
 
@@ -147,7 +150,7 @@ export default function ScoringCard({
             </button>
             <button
               type="submit"
-              disabled={isLocked}
+              disabled={isLocked || score === ''}
               className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 hover:from-indigo-500 hover:to-pink-500 text-white text-xs font-bold shadow-lg shadow-indigo-600/30 transition-all flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
             >
               <Check className="w-4 h-4" />

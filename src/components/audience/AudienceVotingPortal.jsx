@@ -13,7 +13,8 @@ import {
   Unlock, 
   BarChart2, 
   Smartphone,
-  Eye
+  Eye,
+  Radio
 } from 'lucide-react';
 
 export default function AudienceVotingPortal() {
@@ -40,6 +41,7 @@ export default function AudienceVotingPortal() {
   const hasVoted = checkHasVotedInRound(activeRoundId);
   const votedCandidateId = getCandidateVotedInRound(activeRoundId);
   const isRoundLocked = activeRound?.status === 'locked' || activeRound?.status === 'completed';
+  const isAudienceLive = Boolean(activeRound?.isAudienceLive);
   const isRound2 = activeRoundId === 'round-2' || activeRound?.order === 2;
   const roundLabel = isRound2 ? 'Round 2' : 'Round 1';
 
@@ -51,7 +53,7 @@ export default function AudienceVotingPortal() {
   const totalVotesCount = roundVotes.length;
 
   const handleVote = async (candidateId, candidateName) => {
-    if (isRoundLocked || hasVoted) return;
+    if (isRoundLocked || !isAudienceLive || hasVoted) return;
 
     const result = await castAudienceVote(candidateId, activeRoundId);
     if (result && (result.success || result.vote)) {
@@ -94,6 +96,22 @@ export default function AudienceVotingPortal() {
         <div className="p-3.5 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-center gap-2 font-bold text-center shadow-lg">
           <Lock className="w-4 h-4 text-rose-400 shrink-0" />
           <span>{roundLabel} is currently locked. Voting is closed until admin opens the next round.</span>
+        </div>
+      )}
+
+      {/* Audience Voting NOT Live yet banner */}
+      {!isRoundLocked && !isAudienceLive && !hasVoted && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/15 via-slate-900/90 to-amber-500/15 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-center gap-2.5 font-bold text-center shadow-lg">
+          <Radio className="w-4 h-4 text-amber-400 shrink-0 animate-pulse" />
+          <span>Audience voting for {roundLabel} is not live yet. Voting lines will open once announced by the host!</span>
+        </div>
+      )}
+
+      {/* Audience Voting IS Live banner */}
+      {!isRoundLocked && isAudienceLive && !hasVoted && (
+        <div className="p-3.5 rounded-2xl bg-gradient-to-r from-pink-500/20 via-rose-500/15 to-pink-500/20 border border-pink-500/40 text-pink-200 text-xs flex items-center justify-center gap-2 font-bold text-center shadow-lg">
+          <span className="w-2 h-2 rounded-full bg-pink-400 animate-ping" />
+          <span>Audience Voting is LIVE for {roundLabel}! Cast your vote for your favorite dancer below.</span>
         </div>
       )}
 
@@ -199,23 +217,38 @@ export default function AudienceVotingPortal() {
                     <button
                       type="button"
                       onClick={() => handleVote(candidate.id, candidate.name)}
-                      disabled={isRoundLocked || hasVoted}
+                      disabled={isRoundLocked || !isAudienceLive || hasVoted}
                       className={`w-full py-2.5 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all ${
                         hasVoted
                           ? 'bg-slate-800/80 text-slate-500 cursor-not-allowed border border-white/5'
                           : isRoundLocked
                           ? 'bg-slate-800/80 text-slate-500 cursor-not-allowed border border-white/5'
+                          : !isAudienceLive
+                          ? 'bg-slate-800/90 text-amber-300/90 border border-amber-500/30 cursor-not-allowed'
                           : 'bg-gradient-to-r from-pink-600 via-rose-500 to-pink-600 hover:from-pink-500 hover:to-rose-400 text-white shadow-lg shadow-pink-600/30 hover:scale-[1.02] active:scale-[0.98] cursor-pointer'
                       }`}
                     >
-                      <Heart className="w-4 h-4" />
-                      <span>
-                        {isRoundLocked
-                          ? `${roundLabel} Voting Closed`
-                          : hasVoted
-                          ? `Already Voted in ${roundLabel}`
-                          : `Vote for ${candidate.name.split(' ')[0]}`}
-                      </span>
+                      {isRoundLocked ? (
+                        <>
+                          <Lock className="w-4 h-4 text-slate-500" />
+                          <span>{roundLabel} Voting Closed</span>
+                        </>
+                      ) : hasVoted ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-slate-500" />
+                          <span>Already Voted</span>
+                        </>
+                      ) : !isAudienceLive ? (
+                        <>
+                          <Radio className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                          <span>Voting Not Live Yet</span>
+                        </>
+                      ) : (
+                        <>
+                          <Heart className="w-4 h-4" />
+                          <span>Vote for {candidate.name.split(' ')[0]}</span>
+                        </>
+                      )}
                     </button>
                   )}
                 </div>

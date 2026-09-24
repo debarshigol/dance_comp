@@ -52,7 +52,21 @@ export function CompetitionProvider({ children }) {
     } catch (e) {}
     return INITIAL_JUDGES;
   });
-  const [rounds, setRounds] = useState(INITIAL_ROUNDS);
+  const [rounds, setRounds] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.ROUNDS);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map(r => ({
+            ...r,
+            isAudienceLive: Boolean(r.isAudienceLive)
+          }));
+        }
+      }
+    } catch (e) {}
+    return INITIAL_ROUNDS;
+  });
   const [scores, setScores] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEYS.SCORES);
@@ -773,6 +787,45 @@ export function CompetitionProvider({ children }) {
     showToast(isLocked ? `Round unlocked for voting & scoring` : `Round locked! Voting and scoring closed.`);
   };
 
+  const toggleAudienceLive = async (roundId) => {
+    let nowLive = false;
+    let roundLabelName = roundId === 'round-2' ? 'Round 2' : 'Round 1';
+
+    setRounds(prev => {
+      const target = prev.find(r => r.id === roundId);
+      nowLive = !Boolean(target?.isAudienceLive);
+
+      const updated = prev.map(r => {
+        if (r.id === roundId) {
+          return {
+            ...r,
+            isAudienceLive: nowLive
+          };
+        }
+        return r;
+      });
+
+      broadcastSync('SYNC_ALL', { rounds: updated });
+      return updated;
+    });
+
+    const client = getSupabaseClient();
+    if (client) {
+      try {
+        await client.from('competition_rounds').update({ is_audience_live: nowLive }).eq('id', roundId);
+      } catch (e) {
+        console.warn('Supabase toggle audience live error:', e);
+      }
+    }
+
+    showToast(
+      nowLive 
+        ? `Audience voting for ${roundLabelName} is now LIVE! Fans can cast votes.`
+        : `Audience voting for ${roundLabelName} is now CLOSED.`,
+      nowLive ? 'success' : 'info'
+    );
+  };
+
   const updateWeightages = async (roundId, judgeWeightage, audienceWeightage) => {
     const j = Number(judgeWeightage);
     const a = Number(audienceWeightage);
@@ -911,6 +964,11 @@ export function CompetitionProvider({ children }) {
     if (!targetRound || targetRound.status === 'locked' || targetRound.status === 'completed') {
       showToast(`Voting is locked and closed for ${roundId === 'round-2' ? 'Round 2' : 'Round 1'}!`, 'error');
       return { success: false, message: 'Voting is closed for this round.' };
+    }
+
+    if (!targetRound.isAudienceLive) {
+      showToast(`Audience voting for ${roundId === 'round-2' ? 'Round 2' : 'Round 1'} is not live yet!`, 'error');
+      return { success: false, message: 'Audience voting is not live yet.' };
     }
 
     const deviceId = getVoterDeviceId();
@@ -1102,6 +1160,7 @@ export function CompetitionProvider({ children }) {
         updateRound,
         setRoundActive,
         toggleRoundLock,
+        toggleAudienceLive,
         updateWeightages,
         submitJudgeScore,
         castAudienceVote,

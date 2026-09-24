@@ -10,7 +10,8 @@ import {
   Flame, 
   Award, 
   Vote, 
-  Play
+  Play,
+  Radio
 } from 'lucide-react';
 
 export default function RoundManager() {
@@ -22,6 +23,7 @@ export default function RoundManager() {
     round1Leaderboard,
     setRoundActive, 
     toggleRoundLock, 
+    toggleAudienceLive,
     updateWeightages, 
     selectedRoundId, 
     setSelectedRoundId,
@@ -156,6 +158,17 @@ export default function RoundManager() {
                         <Unlock className="w-3 h-3" /> Submissions Open
                       </span>
                     )}
+
+                    {round.isAudienceLive ? (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-pink-500/20 text-pink-300 border border-pink-500/40">
+                        <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-ping" />
+                        Audience Voting Live
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-white/5">
+                        Audience Voting Closed
+                      </span>
+                    )}
                   </div>
 
                   {round.description && (
@@ -172,7 +185,7 @@ export default function RoundManager() {
                       setRoundActive(round.id);
                       setSelectedRoundId(round.id);
                     }}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                       isActive
                         ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
                         : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'
@@ -182,9 +195,25 @@ export default function RoundManager() {
                     <span>{isActive ? 'Active Live Stage' : 'Set as Active Round'}</span>
                   </button>
 
+                  {/* Make Audience Live Button */}
+                  <button
+                    onClick={() => toggleAudienceLive(round.id)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md ${
+                      round.isAudienceLive
+                        ? 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white shadow-pink-600/30 ring-1 ring-pink-400/50'
+                        : 'bg-slate-800 hover:bg-slate-700 text-pink-300 border border-pink-500/30 hover:border-pink-500/60'
+                    }`}
+                    title={round.isAudienceLive ? 'Stop audience voting for this round' : 'Make audience voting live for this round'}
+                  >
+                    <Radio className={`w-3.5 h-3.5 ${round.isAudienceLive ? 'text-white animate-pulse' : 'text-pink-400'}`} />
+                    <span>
+                      {round.isAudienceLive ? 'Stop Audience Voting' : 'Make Audience Live'}
+                    </span>
+                  </button>
+
                   <button
                     onClick={() => toggleRoundLock(round.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                       isLocked
                         ? 'bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-500/40'
                         : 'bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white'

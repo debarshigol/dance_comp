@@ -161,11 +161,6 @@ export default function LeaderboardView() {
             <Trophy className="w-5 h-5 text-amber-400" />
             <span>Leaderboard & Competition Standings</span>
           </h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            {activeView === 'cumulative' 
-              ? 'Comprehensive cumulative standings combining Round 1 & Round 2 scores weighted accurately'
-              : `${currentViewRound?.name} (${currentViewRound?.judgeWeightage}% Judges : ${currentViewRound?.audienceWeightage}% Audience)`}
-          </p>
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
@@ -243,8 +238,8 @@ export default function LeaderboardView() {
         </button>
       </div>
 
-      {/* Podium Cards for Top 3 */}
-      {topThree.length > 0 && (
+      {/* Podium Cards for Top 3 (Only displayed for Final Cumulative Leaderboard; removed for Round 1 & Round 2) */}
+      {activeView === 'cumulative' && topThree.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
           {/* 1st Place - Gold */}
           {topThree[0] && (
